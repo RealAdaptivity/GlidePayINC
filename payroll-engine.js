@@ -383,11 +383,52 @@ function calculatePayroll(employee, currentRun, ytdGross = 0) {
     };
 }
 
+const DEFAULT_WORKERS_COMP_RATES = {
+    '8810': { title: 'Clerical & Software Professional', rate: 0.25 },
+    '8742': { title: 'Outside Sales & Marketing', rate: 0.55 },
+    '8017': { title: 'Retail & Store Operations', rate: 1.85 },
+    '9079': { title: 'Dining & Hospitality', rate: 2.40 },
+    '5403': { title: 'Construction & Field Trades', rate: 5.80 },
+    'default': { title: 'General Operations', rate: 0.75 }
+};
+
+const IRS_MILEAGE_RATE_2026 = 0.67; // $0.67 per business mile
+
+function calculateWorkersComp(emp, grossPay, customRates = {}) {
+    const code = emp.workersCompCode || '8810';
+    const rateConfig = customRates[code] || DEFAULT_WORKERS_COMP_RATES[code] || DEFAULT_WORKERS_COMP_RATES['default'];
+    const rate = rateConfig.rate || 0.75;
+    const premium = round((grossPay / 100) * rate);
+    return {
+        classCode: code,
+        title: rateConfig.title,
+        ratePerHundred: rate,
+        premium: premium
+    };
+}
+
+function calculateMileageReimbursement(miles) {
+    const m = Math.max(0, parseFloat(miles) || 0);
+    return round(m * IRS_MILEAGE_RATE_2026);
+}
+
 function round(val) {
     return Math.round((val + Number.EPSILON) * 100) / 100;
 }
 
 // Export functions for browser environment
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { calculatePayroll, PAY_FREQUENCIES, FED_BRACKETS, CA_BRACKETS, NY_BRACKETS, SUPPORTED_TAX_STATES };
+    module.exports = {
+        calculatePayroll,
+        calculateWorkersComp,
+        calculateMileageReimbursement,
+        DEFAULT_WORKERS_COMP_RATES,
+        IRS_MILEAGE_RATE_2026,
+        PAY_FREQUENCIES,
+        FED_BRACKETS,
+        CA_BRACKETS,
+        NY_BRACKETS,
+        SUPPORTED_TAX_STATES
+    };
 }
+

@@ -1534,6 +1534,286 @@ const AeroDB = {
     },
 
     // ─────────────────────────────────────────
+    // 1. MULTI-COMPANY & ACCOUNTANT SWITCHBOARD
+    // ─────────────────────────────────────────
+    async getManagedCompanies() {
+        const user = await this.getUser();
+        if (!user) return [];
+        const { data, error } = await _sb
+            .from('company_users')
+            .select('company_id, role, created_at, companies(*)')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false });
+        if (error || !data?.length) return [];
+        return data.map(cu => ({
+            id: cu.companies?.id || cu.company_id,
+            name: cu.companies?.name || 'Company',
+            role: cu.role,
+            ein: cu.companies?.ein || '',
+            stripeStatus: cu.companies?.stripe_account_status || 'not_created',
+            setupComplete: !!cu.companies?.setup_complete,
+            createdAt: cu.created_at
+        }));
+    },
+
+    async switchCompany(companyId) {
+        localStorage.setItem('aeropay_active_company_id', companyId);
+        sessionStorage.setItem('aeropay_active_company_id', companyId);
+        return await this.loadFullState();
+    },
+
+    // ─────────────────────────────────────────
+    // 2. DIGITAL ONBOARDING: W-9 & I-9 FORMS
+    // ─────────────────────────────────────────
+    _localW9Store: {},
+    _localI9Store: {},
+
+    async getW9Records() {
+        return this._localW9Store;
+    },
+
+    async saveW9Record(empId, w9Data) {
+        this._localW9Store[empId] = {
+            ...w9Data,
+            employeeId: empId,
+            signedAt: new Date().toISOString(),
+            status: 'verified'
+        };
+        try {
+            await this.addAuditLog('W-9 Form Submitted', `Form W-9 submitted for contractor ${w9Data.legalName || empId}`, 'compliance');
+        } catch (_) {}
+        return this._localW9Store[empId];
+    },
+
+    async getI9Records() {
+        return this._localI9Store;
+    },
+
+    async saveI9Record(empId, i9Data) {
+        this._localI9Store[empId] = {
+            ...i9Data,
+            employeeId: empId,
+            verifiedAt: new Date().toISOString(),
+            status: 'verified'
+        };
+        try {
+            await this.addAuditLog('I-9 Verification Completed', `Form I-9 verified for employee ${i9Data.employeeName || empId}`, 'compliance');
+        } catch (_) {}
+        return this._localI9Store[empId];
+    },
+
+    // ─────────────────────────────────────────
+    // 3. GPS MOBILE TIME CLOCK & TABLET KIOSK
+    // ─────────────────────────────────────────
+    _localTimePunches: [],
+
+    async getTimePunches(empId = null) {
+        if (empId) {
+            return this._localTimePunches.filter(p => p.employeeId === empId);
+        }
+        return this._localTimePunches;
+    },
+
+    async recordTimePunch(empId, type, location = null, device = 'mobile') {
+        const company = await this.getCompany();
+        const punch = {
+            id: 'punch_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+            companyId: company.id,
+            employeeId: empId,
+            type: type, // 'clock_in' | 'meal_start' | 'meal_end' | 'clock_out'
+            timestamp: new Date().toISOString(),
+            latitude: location?.lat || null,
+            longitude: location?.lng || null,
+            accuracy: location?.accuracy || null,
+            address: location?.address || 'GPS Verified',
+            device: device
+        };
+        this._localTimePunches.unshift(punch);
+        return punch;
+    },
+
+    async kioskPinPunch(pin, type, location = null) {
+        const employees = await this.getEmployees();
+        // Match employee by 4-digit PIN (default to last 4 digits of ID or SSN, or fallback matching)
+        const emp = employees.find(e => {
+            const empPin = e.kioskPin || (e.id ? e.id.replace(/\D/g, '').slice(-4) : '') || '1234';
+            return empPin === String(pin).trim();
+        });
+        if (!emp) {
+            throw new Error('Invalid employee PIN. Please try again.');
+        }
+        const punch = await this.recordTimePunch(emp.id, type, location, 'tablet_kiosk');
+        return { punch, employee: emp };
+    },
+
+    // ─────────────────────────────────────────
+    // 4. PAY-AS-YOU-GO WORKERS' COMPENSATION
+    // ─────────────────────────────────────────
+    _localWorkersCompRates: {
+        '8810': { title: 'Clerical & Software Professional', rate: 0.25 },
+        '8742': { title: 'Outside Sales & Marketing', rate: 0.55 },
+        '8017': { title: 'Retail & Store Operations', rate: 1.85 },
+        '9079': { title: 'Dining & Hospitality', rate: 2.40 },
+        '5403': { title: 'Construction & Field Trades', rate: 5.80 },
+    },
+
+    async getWorkersCompSettings() {
+        return this._localWorkersCompRates;
+    },
+
+    async saveWorkersCompSettings(rates) {
+        this._localWorkersCompRates = { ...this._localWorkersCompRates, ...rates };
+        try {
+            await this.addAuditLog('Workers Comp Rates Updated', 'Updated state classification rates', 'settings');
+        } catch (_) {}
+        return this._localWorkersCompRates;
+    },
+
+    // ─────────────────────────────────────────
+    // 5. EXPENSE & MILEAGE REIMBURSEMENTS
+    // ─────────────────────────────────────────
+    _localExpenses: [
+        {
+            id: 'exp-1',
+            employeeId: 'emp-101',
+            employeeName: 'Sarah Jenkins',
+            category: 'Mileage',
+            description: 'Client on-site architecture review (85 miles)',
+            amount: 56.95,
+            miles: 85,
+            receiptUrl: null,
+            status: 'approved',
+            submittedAt: '2026-08-10T14:30:00Z',
+            approvedAt: '2026-08-11T09:15:00Z'
+        },
+        {
+            id: 'exp-2',
+            employeeId: 'emp-103',
+            employeeName: 'Elena Rostova',
+            category: 'Equipment',
+            description: 'Noise-cancelling headset for support calls',
+            amount: 49.99,
+            miles: 0,
+            receiptUrl: null,
+            status: 'pending',
+            submittedAt: '2026-08-14T11:20:00Z',
+            approvedAt: null
+        }
+    ],
+
+    async getExpenses() {
+        return this._localExpenses;
+    },
+
+    async submitExpense(data) {
+        const company = await this.getCompany();
+        const user = await this.getUser();
+        const exp = {
+            id: 'exp_' + Date.now(),
+            companyId: company.id,
+            employeeId: data.employeeId,
+            employeeName: data.employeeName || 'Employee',
+            category: data.category || 'General',
+            description: data.description,
+            amount: parseFloat(data.amount) || 0,
+            miles: parseFloat(data.miles) || 0,
+            receiptUrl: data.receiptUrl || null,
+            status: 'pending',
+            submittedAt: new Date().toISOString(),
+            approvedAt: null
+        };
+        this._localExpenses.unshift(exp);
+        try {
+            await this.addAuditLog('Expense Submitted', `${exp.employeeName} submitted $${exp.amount.toFixed(2)} (${exp.category})`, 'payroll');
+        } catch (_) {}
+        return exp;
+    },
+
+    async approveExpense(expenseId) {
+        const exp = this._localExpenses.find(e => e.id === expenseId);
+        if (exp) {
+            exp.status = 'approved';
+            exp.approvedAt = new Date().toISOString();
+            try {
+                await this.addAuditLog('Expense Approved', `Approved $${exp.amount.toFixed(2)} reimbursement for ${exp.employeeName}`, 'payroll');
+            } catch (_) {}
+        }
+        return exp;
+    },
+
+    async denyExpense(expenseId) {
+        const exp = this._localExpenses.find(e => e.id === expenseId);
+        if (exp) {
+            exp.status = 'denied';
+            try {
+                await this.addAuditLog('Expense Denied', `Denied expense ${expenseId} for ${exp.employeeName}`, 'payroll');
+            } catch (_) {}
+        }
+        return exp;
+    },
+
+    // ─────────────────────────────────────────
+    // 6. SLACK, DISCORD & TEAMS WEBHOOKS
+    // ─────────────────────────────────────────
+    _localWebhooks: {
+        slackUrl: '',
+        teamsUrl: '',
+        discordUrl: '',
+        events: {
+            payrollSubmitted: true,
+            payrollApproved: true,
+            paydayReminder: true,
+            newHireOnboarded: true
+        }
+    },
+
+    async getWebhookSettings() {
+        return this._localWebhooks;
+    },
+
+    async saveWebhookSettings(settings) {
+        this._localWebhooks = { ...this._localWebhooks, ...settings };
+        try {
+            await this.addAuditLog('Webhook Settings Updated', 'Updated notification webhook endpoints', 'settings');
+        } catch (_) {}
+        return this._localWebhooks;
+    },
+
+    async dispatchWebhookNotification(event, title, message, fields = []) {
+        const settings = await this.getWebhookSettings();
+        if (!settings.events?.[event]) return;
+
+        const urls = [settings.slackUrl, settings.teamsUrl, settings.discordUrl].filter(Boolean);
+        if (!urls.length) return;
+
+        const payload = {
+            text: `*${title}*\n${message}`,
+            attachments: [
+                {
+                    color: event === 'payrollApproved' ? '#10b981' : '#3b82f6',
+                    title: title,
+                    text: message,
+                    fields: fields.map(f => ({ title: f.label, value: String(f.value), short: true })),
+                    footer: 'GlidePay Notifications',
+                    ts: Math.floor(Date.now() / 1000)
+                }
+            ]
+        };
+
+        for (const url of urls) {
+            try {
+                await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+            } catch (e) {
+                console.warn('[Webhook] Dispatch failed:', e.message);
+            }
+        }
+    },
+
+    // ─────────────────────────────────────────
     // FULL STATE LOADER
     // ─────────────────────────────────────────
 
@@ -1578,6 +1858,13 @@ const AeroDB = {
             filingRecords,
             taxFilings,
             w2Signatures,
+            managedCompanies,
+            w9Records,
+            i9Records,
+            timePunches,
+            workersCompRates,
+            expenses,
+            webhookSettings,
         ] = await Promise.all([
             soft(() => this.getEmployees(), []),
             soft(() => this.getPayrollHistory(), []),
@@ -1594,6 +1881,13 @@ const AeroDB = {
             isEmployeePortal ? Promise.resolve({}) : soft(() => this.getFilingRecords(), {}),
             isEmployeePortal ? Promise.resolve([]) : soft(() => this.getTaxFilings(), []),
             soft(() => this.getW2Signatures(), {}),
+            soft(() => this.getManagedCompanies(), []),
+            soft(() => this.getW9Records(), {}),
+            soft(() => this.getI9Records(), {}),
+            soft(() => this.getTimePunches(), []),
+            soft(() => this.getWorkersCompSettings(), {}),
+            soft(() => this.getExpenses(), []),
+            soft(() => this.getWebhookSettings(), {}),
         ]);
 
         const userIdToLabel = {};
@@ -1646,6 +1940,13 @@ const AeroDB = {
             taxFilings,
             garnishments:    [],
             w2Signatures:    w2Signatures || {},
+            managedCompanies: managedCompanies || [],
+            w9Records:       w9Records || {},
+            i9Records:       i9Records || {},
+            timePunches:     timePunches || [],
+            workersCompRates: workersCompRates || {},
+            expenses:        expenses || [],
+            webhookSettings: webhookSettings || {},
             burnRateBudget:  { monthly: 45000 },
             splitDeposits:   {},
         };

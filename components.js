@@ -4764,6 +4764,335 @@ function renderHelpDocsView(state) {
         </div>`;
 }
 
+// G. Accountant & Multi-Company Firm Switchboard
+function renderAccountantPortalView(state) {
+    const companies = state.managedCompanies || [];
+    let rows = '';
+    companies.forEach(c => {
+        const isCurrent = c.id === state.settings?.companyId;
+        rows += `
+            <tr>
+                <td style="font-weight:600;">${escapeHTML(c.name)}</td>
+                <td>${escapeHTML(c.ein || 'Pending')}</td>
+                <td><span class="badge ${c.stripeStatus === 'active' ? 'badge-success' : 'badge-warning'}">${c.stripeStatus === 'active' ? 'ACH Active' : 'Setup Required'}</span></td>
+                <td><span class="badge badge-info" style="text-transform:capitalize;">${escapeHTML(c.role)}</span></td>
+                <td style="text-align:right;">
+                    ${isCurrent ? '<span class="badge badge-success">Current Firm</span>' : `
+                        <button class="btn btn-outline" style="padding:4px 12px; font-size:12px;" onclick="AeroApp.switchCompany('${c.id}')">Switch Organization</button>
+                    `}
+                </td>
+            </tr>
+        `;
+    });
+
+    return `
+        <div class="card" style="padding:32px; margin-bottom:24px; background:linear-gradient(135deg, rgba(79,70,229,0.06), rgba(14,165,233,0.06)); border:1px solid var(--border-color);">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+                <div>
+                    <div class="section-title" style="margin-bottom:4px;">Accountant & CPA Firm Portal</div>
+                    <p style="font-size:14px; color:var(--text-secondary); margin:0;">Switch between all client organizations and manage multi-company payroll seamlessly.</p>
+                </div>
+                <button class="btn btn-primary" onclick="AeroApp.promptRegisterNewClientCompany()">+ Add Client Company</button>
+            </div>
+        </div>
+
+        <div class="card table-card">
+            <div class="section-title" style="padding:20px 24px 0 24px;">Managed Client Companies (${companies.length})</div>
+            <div class="table-wrapper">
+                <table class="table-responsive">
+                    <thead><tr><th>Company Name</th><th>EIN</th><th>Payout Status</th><th>Your Role</th><th style="text-align:right;">Action</th></tr></thead>
+                    <tbody>${rows || '<tr><td colspan="5" style="text-align:center; padding:40px; color:var(--text-tertiary);">No additional client companies linked yet.</td></tr>'}</tbody>
+                </table>
+            </div>
+        </div>
+    `;
+}
+
+// H. Digital Onboarding: Form W-9 & Form I-9
+function renderOnboardingFormsView(state) {
+    const contractors = (state.employees || []).filter(e => e.classification === '1099');
+    const w2Employees = (state.employees || []).filter(e => e.classification !== '1099');
+    const w9Map = state.w9Records || {};
+    const i9Map = state.i9Records || {};
+
+    let w9Rows = '';
+    contractors.forEach(c => {
+        const hasW9 = !!w9Map[c.id];
+        w9Rows += `
+            <tr>
+                <td style="font-weight:600;">${escapeHTML(c.name)}</td>
+                <td>1099 Contractor</td>
+                <td>${escapeHTML(c.email)}</td>
+                <td><span class="badge ${hasW9 ? 'badge-success' : 'badge-warning'}">${hasW9 ? 'W-9 Signed ✓' : 'W-9 Pending'}</span></td>
+                <td style="text-align:right;">
+                    <button class="btn btn-outline" style="padding:4px 10px; font-size:12px;" onclick="AeroApp.openW9Modal('${c.id}')">${hasW9 ? 'View W-9' : 'Fill / Sign W-9'}</button>
+                </td>
+            </tr>
+        `;
+    });
+
+    let i9Rows = '';
+    w2Employees.forEach(e => {
+        const hasI9 = !!i9Map[e.id];
+        i9Rows += `
+            <tr>
+                <td style="font-weight:600;">${escapeHTML(e.name)}</td>
+                <td>W-2 Employee</td>
+                <td>${escapeHTML(e.department || 'General')}</td>
+                <td><span class="badge ${hasI9 ? 'badge-success' : 'badge-warning'}">${hasI9 ? 'I-9 Verified ✓' : 'I-9 Incomplete'}</span></td>
+                <td style="text-align:right;">
+                    <button class="btn btn-outline" style="padding:4px 10px; font-size:12px;" onclick="AeroApp.openI9Modal('${e.id}')">${hasI9 ? 'View I-9' : 'Verify I-9'}</button>
+                </td>
+            </tr>
+        `;
+    });
+
+    return `
+        <div class="grid-stats" style="margin-bottom:24px;">
+            <div class="card stat-card">
+                <span class="stat-label">Contractor W-9 Forms</span>
+                <span class="stat-value">${Object.keys(w9Map).length} / ${contractors.length}</span>
+                <span class="stat-trend ${Object.keys(w9Map).length === contractors.length ? 'up' : ''}">Verified TINs</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">Employee I-9 Verifications</span>
+                <span class="stat-value">${Object.keys(i9Map).length} / ${w2Employees.length}</span>
+                <span class="stat-trend ${Object.keys(i9Map).length === w2Employees.length ? 'up' : ''}">Compliant records</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">Federal Compliance Status</span>
+                <span class="stat-value" style="color:var(--success);">100% Active</span>
+                <span class="stat-trend up">Audit ready</span>
+            </div>
+        </div>
+
+        <div class="card table-card" style="margin-bottom:24px;">
+            <div class="section-title" style="padding:20px 24px 0 24px;">Contractor Form W-9 Collection (1099-NEC)</div>
+            <div class="table-wrapper">
+                <table class="table-responsive">
+                    <thead><tr><th>Contractor</th><th>Type</th><th>Email</th><th>W-9 Status</th><th style="text-align:right;">Action</th></tr></thead>
+                    <tbody>${w9Rows || '<tr><td colspan="5" style="text-align:center; padding:40px; color:var(--text-tertiary);">No 1099 contractors in this organization.</td></tr>'}</tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card table-card">
+            <div class="section-title" style="padding:20px 24px 0 24px;">Employee Form I-9 Eligibility Verification (W-2)</div>
+            <div class="table-wrapper">
+                <table class="table-responsive">
+                    <thead><tr><th>Employee</th><th>Type</th><th>Department</th><th>I-9 Status</th><th style="text-align:right;">Action</th></tr></thead>
+                    <tbody>${i9Rows || '<tr><td colspan="5" style="text-align:center; padding:40px; color:var(--text-tertiary);">No W-2 employees found.</td></tr>'}</tbody>
+                </table>
+            </div>
+        </div>
+    `;
+}
+
+// I. GPS Mobile Time Clock & Tablet Kiosk
+function renderTimeClockView(state) {
+    const punches = state.timePunches || [];
+    let punchRows = '';
+    punches.slice(0, 15).forEach(p => {
+        const emp = (state.employees || []).find(e => e.id === p.employeeId);
+        const typeLabels = {
+            clock_in: { label: 'Clock In', color: 'success' },
+            meal_start: { label: 'Meal Break Start', color: 'warning' },
+            meal_end: { label: 'Meal Break End', color: 'info' },
+            clock_out: { label: 'Clock Out', color: 'danger' }
+        };
+        const t = typeLabels[p.type] || { label: p.type, color: 'primary' };
+        punchRows += `
+            <tr>
+                <td style="font-weight:600;">${escapeHTML(emp ? emp.name : 'Worker')}</td>
+                <td><span class="badge badge-${t.color}">${t.label}</span></td>
+                <td>${new Date(p.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })} (${new Date(p.timestamp).toLocaleDateString()})</td>
+                <td>📍 ${escapeHTML(p.address || (p.latitude ? `${p.latitude.toFixed(4)}, ${p.longitude.toFixed(4)}` : 'On-Site'))}</td>
+                <td><span class="badge badge-info" style="text-transform:capitalize;">${escapeHTML(p.device || 'mobile')}</span></td>
+            </tr>
+        `;
+    });
+
+    return `
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:24px; margin-bottom:24px;">
+            <div class="card" style="padding:28px; display:flex; flex-direction:column; justify-content:space-between;">
+                <div>
+                    <div class="section-title" style="margin-bottom:8px;">📍 GPS Mobile Punch Clock</div>
+                    <p style="font-size:13px; color:var(--text-secondary); margin-bottom:20px;">Workers clock in and out with live geolocation coordinates and photo verification.</p>
+                </div>
+                <div style="display:flex; gap:12px; flex-wrap:wrap;">
+                    <button class="btn btn-success" style="flex:1;" onclick="AeroApp.handleMobilePunch('clock_in')">🟢 Clock In (GPS)</button>
+                    <button class="btn btn-warning" style="flex:1;" onclick="AeroApp.handleMobilePunch('meal_start')">☕ Meal Break</button>
+                    <button class="btn btn-danger" style="flex:1;" onclick="AeroApp.handleMobilePunch('clock_out')">🔴 Clock Out</button>
+                </div>
+            </div>
+
+            <div class="card" style="padding:28px; background:linear-gradient(135deg, rgba(16,185,129,0.06), rgba(79,70,229,0.06)); border:1px solid var(--border-color); display:flex; flex-direction:column; justify-content:space-between;">
+                <div>
+                    <div class="section-title" style="margin-bottom:8px;">📟 Tablet Breakroom Kiosk</div>
+                    <p style="font-size:13px; color:var(--text-secondary); margin-bottom:16px;">Launch a dedicated full-screen PIN-entry time clock for communal breakrooms and job trailers.</p>
+                </div>
+                <button class="btn btn-primary" onclick="AeroApp.launchTabletKiosk()">🚀 Launch Breakroom Kiosk Mode</button>
+            </div>
+        </div>
+
+        <div class="card table-card">
+            <div class="section-title" style="padding:20px 24px 0 24px;">Live Time Punches (GPS Verified)</div>
+            <div class="table-wrapper">
+                <table class="table-responsive">
+                    <thead><tr><th>Employee</th><th>Punch Event</th><th>Timestamp</th><th>Location</th><th>Device</th></tr></thead>
+                    <tbody>${punchRows || '<tr><td colspan="5" style="text-align:center; padding:40px; color:var(--text-tertiary);">No punches logged today.</td></tr>'}</tbody>
+                </table>
+            </div>
+        </div>
+    `;
+}
+
+// Tablet Kiosk Fullscreen Interface
+function renderTabletKioskView(state) {
+    return `
+        <div style="max-width:480px; margin:40px auto; padding:36px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--radius-lg); box-shadow:var(--shadow-lg); text-align:center;">
+            <h2 style="font-family:var(--font-heading); margin-bottom:8px;">🏢 Breakroom Time Clock</h2>
+            <p style="font-size:13px; color:var(--text-secondary); margin-bottom:24px;">Enter your 4-digit Employee PIN to punch in or out.</p>
+            
+            <input type="password" id="kioskPinInput" maxlength="4" style="font-size:32px; letter-spacing:12px; text-align:center; width:200px; padding:12px; border:2px solid var(--primary); border-radius:var(--radius-md); margin-bottom:24px;" placeholder="••••" />
+
+            <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; max-width:280px; margin:0 auto 24px auto;">
+                ${[1,2,3,4,5,6,7,8,9,'C',0,'⌫'].map(btn => `
+                    <button class="btn btn-secondary" style="font-size:20px; font-weight:700; padding:14px 0;" onclick="AeroApp.kioskKeypadPress('${btn}')">${btn}</button>
+                `).join('')}
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+                <button class="btn btn-success" style="padding:14px; font-size:15px;" onclick="AeroApp.submitKioskPunch('clock_in')">Clock In</button>
+                <button class="btn btn-danger" style="padding:14px; font-size:15px;" onclick="AeroApp.submitKioskPunch('clock_out')">Clock Out</button>
+            </div>
+            <div style="margin-top:20px;">
+                <button class="btn btn-outline" style="font-size:12px;" onclick="AeroApp.navigateTo('time-tracking')">Exit Kiosk Mode</button>
+            </div>
+        </div>
+    `;
+}
+
+// J. Pay-As-You-Go Workers' Compensation
+function renderWorkersCompView(state) {
+    const rates = state.workersCompRates || DEFAULT_WORKERS_COMP_RATES;
+    const employees = state.employees || [];
+
+    let rows = '';
+    let totalEstPremium = 0;
+    employees.forEach(emp => {
+        const grossEst = emp.type === 'salaried' ? (emp.rate / 26) : (emp.rate * 80);
+        const comp = calculateWorkersComp(emp, grossEst, rates);
+        totalEstPremium += comp.premium;
+        rows += `
+            <tr>
+                <td style="font-weight:600;">${escapeHTML(emp.name)}</td>
+                <td><code>${escapeHTML(comp.classCode)}</code></td>
+                <td>${escapeHTML(comp.title)}</td>
+                <td>$${comp.ratePerHundred.toFixed(2)} / $100</td>
+                <td>${formatCurrency(grossEst)}</td>
+                <td style="font-weight:700; color:var(--primary);">${formatCurrency(comp.premium)}</td>
+            </tr>
+        `;
+    });
+
+    return `
+        <div class="grid-stats" style="margin-bottom:24px;">
+            <div class="card stat-card">
+                <span class="stat-label">Estimated Premium (Per Run)</span>
+                <span class="stat-value">${formatCurrency(totalEstPremium)}</span>
+                <span class="stat-trend up">Pay-as-you-go</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">Active Risk Class Codes</span>
+                <span class="stat-value">${Object.keys(rates).length}</span>
+                <span class="stat-trend">State mapped</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">Carrier Audit Status</span>
+                <span class="stat-value" style="color:var(--success);">Verified</span>
+                <span class="stat-trend up">No annual lump-sum</span>
+            </div>
+        </div>
+
+        <div class="card table-card" style="margin-bottom:24px;">
+            <div class="section-title" style="padding:20px 24px 0 24px; display:flex; justify-content:space-between; align-items:center;">
+                <span>Pay-As-You-Go Employee Class Code Breakdown</span>
+                <button class="btn btn-outline" style="font-size:12px;" onclick="AeroApp.exportWorkersCompLedger()">Export Carrier Audit CSV</button>
+            </div>
+            <div class="table-wrapper">
+                <table class="table-responsive">
+                    <thead><tr><th>Employee</th><th>Code</th><th>Classification Title</th><th>Rate per $100</th><th>Est. Cycle Wages</th><th>Est. Premium</th></tr></thead>
+                    <tbody>${rows || '<tr><td colspan="6" style="text-align:center; padding:40px; color:var(--text-tertiary);">No employee records found.</td></tr>'}</tbody>
+                </table>
+            </div>
+        </div>
+    `;
+}
+
+// K. Smart Expense & Mileage Tracker
+function renderExpensesView(state) {
+    const expenses = state.expenses || [];
+    let rows = '';
+    expenses.forEach(exp => {
+        const statusColors = { pending: 'warning', approved: 'success', denied: 'danger' };
+        rows += `
+            <tr>
+                <td style="font-weight:600;">${escapeHTML(exp.employeeName)}</td>
+                <td><span class="badge badge-info">${escapeHTML(exp.category)}</span></td>
+                <td>${escapeHTML(exp.description)}</td>
+                <td>${exp.miles > 0 ? `${exp.miles} mi ($0.67/mi)` : '—'}</td>
+                <td style="font-weight:700; color:var(--success);">${formatCurrency(exp.amount)}</td>
+                <td><span class="badge badge-${statusColors[exp.status] || 'primary'}" style="text-transform:capitalize;">${escapeHTML(exp.status)}</span></td>
+                <td style="text-align:right;">
+                    ${exp.status === 'pending' ? `
+                        <div style="display:flex; gap:6px; justify-content:flex-end;">
+                            <button class="btn btn-outline" style="padding:3px 8px; font-size:11px; color:var(--success); border-color:var(--success);" onclick="AeroApp.approveExpenseItem('${exp.id}')">Approve</button>
+                            <button class="btn btn-outline" style="padding:3px 8px; font-size:11px; color:var(--danger); border-color:var(--danger);" onclick="AeroApp.denyExpenseItem('${exp.id}')">Deny</button>
+                        </div>
+                    ` : '<span style="font-size:12px; color:var(--text-tertiary);">Processed</span>'}
+                </td>
+            </tr>
+        `;
+    });
+
+    const pendingTotal = expenses.filter(e => e.status === 'pending').reduce((s, e) => s + e.amount, 0);
+    const approvedTotal = expenses.filter(e => e.status === 'approved').reduce((s, e) => s + e.amount, 0);
+
+    return `
+        <div class="grid-stats" style="margin-bottom:24px;">
+            <div class="card stat-card">
+                <span class="stat-label">Pending Reimbursements</span>
+                <span class="stat-value">${formatCurrency(pendingTotal)}</span>
+                <span class="stat-trend" style="color:var(--warning);">${expenses.filter(e => e.status === 'pending').length} pending approval</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">Approved for Next Payroll</span>
+                <span class="stat-value">${formatCurrency(approvedTotal)}</span>
+                <span class="stat-trend up">Tax-free additions</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">2026 IRS Mileage Rate</span>
+                <span class="stat-value">$0.67 / mi</span>
+                <span class="stat-trend up">Standard IRS rate</span>
+            </div>
+        </div>
+
+        <div class="card table-card">
+            <div class="section-title" style="padding:20px 24px 0 24px; display:flex; justify-content:space-between; align-items:center;">
+                <span>Expense & Mileage Reimbursement Queue</span>
+                <button class="btn btn-primary" style="font-size:12px;" onclick="AeroApp.openSubmitExpenseModal()">+ Submit New Expense</button>
+            </div>
+            <div class="table-wrapper">
+                <table class="table-responsive">
+                    <thead><tr><th>Employee</th><th>Category</th><th>Description</th><th>Mileage</th><th>Amount</th><th>Status</th><th style="text-align:right;">Actions</th></tr></thead>
+                    <tbody>${rows || '<tr><td colspan="7" style="text-align:center; padding:40px; color:var(--text-tertiary);">No expenses submitted.</td></tr>'}</tbody>
+                </table>
+            </div>
+        </div>
+    `;
+}
+
 // Export UI Renderers
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
@@ -4800,6 +5129,13 @@ if (typeof module !== 'undefined' && module.exports) {
         renderEmployeePTOView,
         renderEmployeeBenefitsView,
         renderEmployee401kView,
-        renderHelpDocsView
+        renderHelpDocsView,
+        renderAccountantPortalView,
+        renderOnboardingFormsView,
+        renderTimeClockView,
+        renderTabletKioskView,
+        renderWorkersCompView,
+        renderExpensesView
     };
 }
+

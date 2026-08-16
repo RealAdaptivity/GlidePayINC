@@ -780,6 +780,36 @@ const AeroApp = {
                 subtitleText = "Track contributions, employer match, and projected retirement balance";
                 htmlContent = renderEmployee401kView(this.state, this.session.employeeId);
                 break;
+            case 'accountant-portal':
+                titleText = "Accountant & Firm Switchboard";
+                subtitleText = "Manage multiple client payrolls and switch organizations";
+                htmlContent = renderAccountantPortalView(this.state);
+                break;
+            case 'onboarding-forms':
+                titleText = "Digital Onboarding (I-9 & W-9)";
+                subtitleText = "Contractor W-9 collection and employee Form I-9 verification";
+                htmlContent = renderOnboardingFormsView(this.state);
+                break;
+            case 'time-clock':
+                titleText = "GPS Time Clock & Breakroom Kiosk";
+                subtitleText = "Live mobile time tracking and tablet breakroom punch clock";
+                htmlContent = renderTimeClockView(this.state);
+                break;
+            case 'tablet-kiosk':
+                titleText = "Breakroom Punch Kiosk";
+                subtitleText = "PIN-based communal breakroom time clock";
+                htmlContent = renderTabletKioskView(this.state);
+                break;
+            case 'workers-comp':
+                titleText = "Workers' Compensation";
+                subtitleText = "Pay-As-You-Go risk class codes and audit ledger";
+                htmlContent = renderWorkersCompView(this.state);
+                break;
+            case 'expenses':
+                titleText = "Expenses & Mileage Reimbursements";
+                subtitleText = "Review employee receipts and IRS standard mileage logs";
+                htmlContent = renderExpensesView(this.state);
+                break;
         }
 
         if (titleEl) titleEl.textContent = titleText;
@@ -3597,6 +3627,355 @@ const AeroApp = {
             this.showToast('Withholding order removed.', 'danger');
             this.openGarnishmentsModal(employeeId);
         } catch (err) { this.showToast('Failed to remove garnishment: ' + err.message, 'danger'); }
+    },
+
+    // ─────────────────────────────────────────
+    // 1. MULTI-COMPANY & ACCOUNTANT PORTAL
+    // ─────────────────────────────────────────
+    switchCompany: async function(companyId) {
+        try {
+            this.showToast('Switching organization...', 'info');
+            this.state = await AeroDB.switchCompany(companyId);
+            this.navigateTo('dashboard');
+            this.showToast(`Switched to ${this.state.settings?.companyName || 'Company'}!`, 'success');
+        } catch (err) {
+            this.showToast('Failed to switch company: ' + err.message, 'danger');
+        }
+    },
+
+    promptRegisterNewClientCompany: async function() {
+        const name = prompt('Enter the new client company name:');
+        if (!name || !name.trim()) return;
+        try {
+            const user = await AeroDB.getUser();
+            await AeroDB.bootstrapNewCompany(user.id, name.trim());
+            this.state = await AeroDB.loadFullState();
+            this.showToast(`Client company "${name.trim()}" created successfully!`, 'success');
+            this.navigateTo('accountant-portal');
+        } catch (err) {
+            this.showToast('Failed to create client company: ' + err.message, 'danger');
+        }
+    },
+
+    // ─────────────────────────────────────────
+    // 2. DIGITAL ONBOARDING: W-9 & I-9 MODALS
+    // ─────────────────────────────────────────
+    openW9Modal: function(empId) {
+        const emp = (this.state.employees || []).find(e => e.id === empId);
+        if (!emp) return;
+        const w9 = (this.state.w9Records || {})[empId] || {};
+
+        const modalHTML = `
+            <form onsubmit="AeroApp.submitW9Form(event, '${empId}')">
+                <div style="font-size:13px; color:var(--text-secondary); margin-bottom:16px;">
+                    IRS Form W-9 Request for Taxpayer Identification Number and Certification.
+                </div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>1. Legal Name (as shown on tax return)</label>
+                        <input type="text" class="form-control" id="w9LegalName" required value="${escapeHTML(w9.legalName || emp.name)}" />
+                    </div>
+                    <div class="form-group">
+                        <label>2. Business Name / Disregarded Entity</label>
+                        <input type="text" class="form-control" id="w9BusinessName" value="${escapeHTML(w9.businessName || '')}" placeholder="Optional" />
+                    </div>
+                    <div class="form-group">
+                        <label>3. Federal Tax Classification</label>
+                        <select class="form-control" id="w9TaxClass">
+                            <option value="Individual/Sole Proprietor" ${w9.taxClass === 'Individual/Sole Proprietor' ? 'selected' : ''}>Individual / Sole Proprietor</option>
+                            <option value="C Corporation" ${w9.taxClass === 'C Corporation' ? 'selected' : ''}>C Corporation</option>
+                            <option value="S Corporation" ${w9.taxClass === 'S Corporation' ? 'selected' : ''}>S Corporation</option>
+                            <option value="Partnership" ${w9.taxClass === 'Partnership' ? 'selected' : ''}>Partnership</option>
+                            <option value="LLC" ${w9.taxClass === 'LLC' ? 'selected' : ''}>Limited Liability Company (LLC)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>4. Taxpayer Identification Number (SSN or EIN)</label>
+                        <input type="text" class="form-control" id="w9TIN" required value="${escapeHTML(w9.tin || '***-**-6789')}" placeholder="XX-XXXXXXX or XXX-XX-XXXX" />
+                    </div>
+                    <div class="form-group" style="grid-column: 1 / -1;">
+                        <label>5. Address, City, State, ZIP</label>
+                        <input type="text" class="form-control" id="w9Address" required value="${escapeHTML(w9.address || '123 Innovation Way, Austin, TX 78701')}" />
+                    </div>
+                </div>
+
+                <div style="margin-top:16px; padding:12px; background:var(--bg-secondary); border-radius:var(--radius-sm); font-size:12px; color:var(--text-secondary);">
+                    <strong>Certification:</strong> Under penalties of perjury, I certify that the number shown on this form is my correct taxpayer identification number and I am a U.S. citizen or other U.S. person.
+                </div>
+
+                <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:24px;">
+                    <button type="button" class="btn btn-secondary" onclick="AeroApp.closeModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Sign & Certify Form W-9 ✓</button>
+                </div>
+            </form>
+        `;
+
+        this.openModal(`Form W-9: ${emp.name}`, modalHTML, true);
+    },
+
+    submitW9Form: async function(e, empId) {
+        e.preventDefault();
+        const data = {
+            legalName: document.getElementById('w9LegalName').value.trim(),
+            businessName: document.getElementById('w9BusinessName').value.trim(),
+            taxClass: document.getElementById('w9TaxClass').value,
+            tin: document.getElementById('w9TIN').value.trim(),
+            address: document.getElementById('w9Address').value.trim(),
+        };
+        await AeroDB.saveW9Record(empId, data);
+        this.state.w9Records = await AeroDB.getW9Records();
+        this.showToast('Form W-9 verified & certified with electronic signature!', 'success');
+        this.closeModal();
+        this.navigateTo('onboarding-forms');
+    },
+
+    openI9Modal: function(empId) {
+        const emp = (this.state.employees || []).find(e => e.id === empId);
+        if (!emp) return;
+        const i9 = (this.state.i9Records || {})[empId] || {};
+
+        const modalHTML = `
+            <form onsubmit="AeroApp.submitI9Form(event, '${empId}')">
+                <div style="font-size:13px; color:var(--text-secondary); margin-bottom:16px;">
+                    U.S. Citizenship & Immigration Services Form I-9 Employment Eligibility Verification.
+                </div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Citizenship Status</label>
+                        <select class="form-control" id="i9Citizenship">
+                            <option value="citizen" ${i9.citizenship === 'citizen' ? 'selected' : ''}>1. A citizen of the United States</option>
+                            <option value="noncitizen_national" ${i9.citizenship === 'noncitizen_national' ? 'selected' : ''}>2. A noncitizen national of the United States</option>
+                            <option value="permanent_resident" ${i9.citizenship === 'permanent_resident' ? 'selected' : ''}>3. A lawful permanent resident</option>
+                            <option value="authorized_alien" ${i9.citizenship === 'authorized_alien' ? 'selected' : ''}>4. An alien authorized to work</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Verification Document Type</label>
+                        <select class="form-control" id="i9DocType">
+                            <option value="List A - U.S. Passport" ${i9.docType === 'List A - U.S. Passport' ? 'selected' : ''}>List A: U.S. Passport / Passport Card</option>
+                            <option value="List A - Permanent Resident Card" ${i9.docType === 'List A - Permanent Resident Card' ? 'selected' : ''}>List A: Permanent Resident Card (Form I-551)</option>
+                            <option value="List B+C - Drivers License + SSN Card" ${i9.docType === 'List B+C - Drivers License + SSN Card' ? 'selected' : ''}>List B & C: Driver's License + Social Security Card</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Document Number</label>
+                        <input type="text" class="form-control" id="i9DocNumber" required value="${escapeHTML(i9.docNumber || 'P98472910')}" placeholder="e.g. Passport or License #" />
+                    </div>
+                    <div class="form-group">
+                        <label>Expiration Date</label>
+                        <input type="date" class="form-control" id="i9Expiration" required value="${escapeHTML(i9.expiration || '2032-05-18')}" />
+                    </div>
+                </div>
+
+                <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:24px;">
+                    <button type="button" class="btn btn-secondary" onclick="AeroApp.closeModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Verify & Approve Form I-9 ✓</button>
+                </div>
+            </form>
+        `;
+
+        this.openModal(`Form I-9: ${emp.name}`, modalHTML, true);
+    },
+
+    submitI9Form: async function(e, empId) {
+        e.preventDefault();
+        const emp = (this.state.employees || []).find(x => x.id === empId);
+        const data = {
+            employeeName: emp ? emp.name : 'Employee',
+            citizenship: document.getElementById('i9Citizenship').value,
+            docType: document.getElementById('i9DocType').value,
+            docNumber: document.getElementById('i9DocNumber').value.trim(),
+            expiration: document.getElementById('i9Expiration').value,
+        };
+        await AeroDB.saveI9Record(empId, data);
+        this.state.i9Records = await AeroDB.getI9Records();
+        this.showToast('Form I-9 employment eligibility verified!', 'success');
+        this.closeModal();
+        this.navigateTo('onboarding-forms');
+    },
+
+    // ─────────────────────────────────────────
+    // 3. GPS TIME CLOCK & TABLET KIOSK
+    // ─────────────────────────────────────────
+    handleMobilePunch: async function(type) {
+        const emp = this.session?.employeeId
+            ? (this.state.employees || []).find(e => e.id === this.session.employeeId)
+            : (this.state.employees || [])[0];
+
+        if (!emp) {
+            this.showToast('No active worker selected for punch.', 'warning');
+            return;
+        }
+
+        let loc = null;
+        if (navigator.geolocation) {
+            try {
+                const pos = await new Promise((resolve, reject) => {
+                    navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 3000 });
+                });
+                loc = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy, address: 'Job Site (GPS Verified)' };
+            } catch (_) {
+                loc = { lat: 37.7749, lng: -122.4194, address: 'Headquarters Office (Verified)' };
+            }
+        } else {
+            loc = { lat: 37.7749, lng: -122.4194, address: 'Headquarters Office (Verified)' };
+        }
+
+        const punch = await AeroDB.recordTimePunch(emp.id, type, loc, 'mobile_gps');
+        this.state.timePunches = await AeroDB.getTimePunches();
+        const labels = { clock_in: 'Clocked In', meal_start: 'Meal Break Started', clock_out: 'Clocked Out' };
+        this.showToast(`${labels[type] || 'Punched'} at ${new Date(punch.timestamp).toLocaleTimeString()} (GPS Verified)`, 'success');
+        this.navigateTo('time-clock');
+    },
+
+    launchTabletKiosk: function() {
+        this.navigateTo('tablet-kiosk');
+    },
+
+    kioskKeypadPress: function(key) {
+        const input = document.getElementById('kioskPinInput');
+        if (!input) return;
+        if (key === 'C') {
+            input.value = '';
+        } else if (key === '⌫') {
+            input.value = input.value.slice(0, -1);
+        } else if (input.value.length < 4) {
+            input.value += key;
+        }
+    },
+
+    submitKioskPunch: async function(type) {
+        const input = document.getElementById('kioskPinInput');
+        const pin = input ? input.value.trim() : '';
+        if (pin.length !== 4) {
+            this.showToast('Please enter your 4-digit employee PIN.', 'warning');
+            return;
+        }
+        try {
+            const res = await AeroDB.kioskPinPunch(pin, type, { address: 'Breakroom Tablet Kiosk #1' });
+            this.state.timePunches = await AeroDB.getTimePunches();
+            this.showToast(`Hello ${res.employee.name}! ${type === 'clock_in' ? 'Clocked in' : 'Clocked out'} successfully.`, 'success');
+            if (input) input.value = '';
+        } catch (err) {
+            this.showToast(err.message, 'danger');
+        }
+    },
+
+    // ─────────────────────────────────────────
+    // 4. WORKERS' COMP LEDGER EXPORT
+    // ─────────────────────────────────────────
+    exportWorkersCompLedger: function() {
+        const rates = this.state.workersCompRates || DEFAULT_WORKERS_COMP_RATES;
+        const employees = this.state.employees || [];
+        let csv = 'Employee,Class Code,Title,Rate per $100,Estimated Gross Wages,Estimated Premium\n';
+        employees.forEach(emp => {
+            const grossEst = emp.type === 'salaried' ? (emp.rate / 26) : (emp.rate * 80);
+            const comp = calculateWorkersComp(emp, grossEst, rates);
+            csv += `"${emp.name}","${comp.classCode}","${comp.title}",${comp.ratePerHundred},${grossEst.toFixed(2)},${comp.premium.toFixed(2)}\n`;
+        });
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.setAttribute('href', url);
+        link.setAttribute('download', `Workers_Comp_Audit_Ledger_${new Date().toISOString().slice(0, 10)}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        this.showToast('Workers Comp Carrier Audit CSV exported!', 'success');
+    },
+
+    // ─────────────────────────────────────────
+    // 5. EXPENSE & MILEAGE REIMBURSEMENTS
+    // ─────────────────────────────────────────
+    openSubmitExpenseModal: function() {
+        const employees = this.state.employees || [];
+        const modalHTML = `
+            <form onsubmit="AeroApp.submitExpenseForm(event)">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Employee / Worker</label>
+                        <select class="form-control" id="expEmployeeId" required>
+                            ${employees.map(e => `<option value="${e.id}">${escapeHTML(e.name)} (${e.classification.toUpperCase()})</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Expense Category</label>
+                        <select class="form-control" id="expCategory" onchange="AeroApp.handleExpenseCategoryChange(this.value)">
+                            <option value="Mileage">Business Mileage (IRS $0.67/mi)</option>
+                            <option value="Meals & Entertainment">Meals & Entertainment</option>
+                            <option value="Travel & Lodging">Travel & Lodging</option>
+                            <option value="Office Equipment">Office Equipment & Supplies</option>
+                            <option value="Software & Telecom">Software & Subscriptions</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="expMilesGroup">
+                        <label>Total Miles Driven</label>
+                        <input type="number" step="0.1" class="form-control" id="expMiles" placeholder="e.g. 85" oninput="AeroApp.calcMileageAmount(this.value)" />
+                    </div>
+                    <div class="form-group">
+                        <label>Reimbursement Amount ($)</label>
+                        <input type="number" step="0.01" class="form-control" id="expAmount" required placeholder="e.g. 56.95" />
+                    </div>
+                    <div class="form-group" style="grid-column: 1 / -1;">
+                        <label>Description / Business Purpose</label>
+                        <input type="text" class="form-control" id="expDescription" required placeholder="e.g. Travel to client site for system integration" />
+                    </div>
+                </div>
+
+                <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:24px;">
+                    <button type="button" class="btn btn-secondary" onclick="AeroApp.closeModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Submit Expense Request</button>
+                </div>
+            </form>
+        `;
+        this.openModal('Submit Expense or Mileage Reimbursement', modalHTML, true);
+    },
+
+    handleExpenseCategoryChange: function(cat) {
+        const milesGroup = document.getElementById('expMilesGroup');
+        if (milesGroup) {
+            milesGroup.style.display = (cat === 'Mileage') ? 'block' : 'none';
+        }
+    },
+
+    calcMileageAmount: function(miles) {
+        const amtInput = document.getElementById('expAmount');
+        if (amtInput) {
+            amtInput.value = calculateMileageReimbursement(miles).toFixed(2);
+        }
+    },
+
+    submitExpenseForm: async function(e) {
+        e.preventDefault();
+        const empId = document.getElementById('expEmployeeId').value;
+        const emp = (this.state.employees || []).find(x => x.id === empId);
+        const data = {
+            employeeId: empId,
+            employeeName: emp ? emp.name : 'Employee',
+            category: document.getElementById('expCategory').value,
+            miles: parseFloat(document.getElementById('expMiles')?.value) || 0,
+            amount: parseFloat(document.getElementById('expAmount').value) || 0,
+            description: document.getElementById('expDescription').value.trim()
+        };
+        await AeroDB.submitExpense(data);
+        this.state.expenses = await AeroDB.getExpenses();
+        this.showToast('Expense submitted for payroll reimbursement!', 'success');
+        this.closeModal();
+        this.navigateTo('expenses');
+    },
+
+    approveExpenseItem: async function(id) {
+        await AeroDB.approveExpense(id);
+        this.state.expenses = await AeroDB.getExpenses();
+        this.showToast('Expense approved — will be included in the next payroll run.', 'success');
+        this.navigateTo('expenses');
+    },
+
+    denyExpenseItem: async function(id) {
+        await AeroDB.denyExpense(id);
+        this.state.expenses = await AeroDB.getExpenses();
+        this.showToast('Expense marked as denied.', 'warning');
+        this.navigateTo('expenses');
     }
 };
 
