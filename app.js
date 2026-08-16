@@ -810,6 +810,26 @@ const AeroApp = {
                 subtitleText = "Review employee receipts and IRS standard mileage logs";
                 htmlContent = renderExpensesView(this.state);
                 break;
+            case 'org-chart':
+                titleText = "Organizational Hierarchy";
+                subtitleText = "Visual department reporting tree and team distribution";
+                htmlContent = renderOrgChartView(this.state);
+                break;
+            case 'global-contractors':
+                titleText = "Global Contractors (50+ Countries)";
+                subtitleText = "Cross-border payouts, multi-currency conversion, and Form W-8BEN";
+                htmlContent = renderGlobalContractorsView(this.state);
+                break;
+            case 'company-docs':
+                titleText = "Company Policies & E-Sign Center";
+                subtitleText = "Employee handbook, NDAs, and policy compliance tracking";
+                htmlContent = renderCompanyDocumentsView(this.state);
+                break;
+            case 'performance-reviews':
+                titleText = "Performance Reviews & OKRs";
+                subtitleText = "Quarterly review cycles, team goal tracking, and merit wage sync";
+                htmlContent = renderPerformanceReviewsView(this.state);
+                break;
         }
 
         if (titleEl) titleEl.textContent = titleText;
@@ -3976,6 +3996,315 @@ const AeroApp = {
         this.state.expenses = await AeroDB.getExpenses();
         this.showToast('Expense marked as denied.', 'warning');
         this.navigateTo('expenses');
+    },
+
+    // ─────────────────────────────────────────
+    // 6. GLIDEAI ASSISTANT MODAL
+    // ─────────────────────────────────────────
+    openGlideAIChat: function() {
+        const modalHTML = `
+            <div style="display:flex; flex-direction:column; height:450px;">
+                <div id="glideAIChatMessages" style="flex:1; overflow-y:auto; padding:16px; background:var(--bg-secondary); border-radius:var(--radius-md); margin-bottom:16px; display:flex; flex-direction:column; gap:12px;">
+                    <div style="align-self:flex-start; max-width:85%; background:var(--bg-card); padding:12px 16px; border-radius:var(--radius-md); border:1px solid var(--border-color); font-size:13px; line-height:1.5;">
+                        👋 Hello! I'm <strong>GlideAI</strong>, your intelligent HR & Payroll Copilot. Ask me anything about your team's payroll calculations, tax liabilities, PTO balances, or California/New York overtime rules!
+                    </div>
+                </div>
+
+                <form onsubmit="AeroApp.sendGlideAIMessage(event)" style="display:flex; gap:8px;">
+                    <input type="text" id="glideAIChatInput" class="form-control" placeholder="Ask GlideAI (e.g. 'Show Sarah Jenkins PTO balance' or 'What is our CA tax cost?')" required style="flex:1;" />
+                    <button type="submit" class="btn btn-primary" style="padding:0 20px;">Send ⚡</button>
+                </form>
+            </div>
+        `;
+        this.openModal('🤖 GlideAI — HR & Payroll Copilot', modalHTML, true);
+    },
+
+    sendGlideAIMessage: async function(e) {
+        e.preventDefault();
+        const input = document.getElementById('glideAIChatInput');
+        const box = document.getElementById('glideAIChatMessages');
+        if (!input || !box) return;
+
+        const query = input.value.trim();
+        input.value = '';
+
+        // Add user message
+        const userMsg = document.createElement('div');
+        userMsg.style.cssText = 'align-self:flex-end; max-width:85%; background:var(--primary); color:#ffffff; padding:10px 14px; border-radius:var(--radius-md); font-size:13px;';
+        userMsg.textContent = query;
+        box.appendChild(userMsg);
+        box.scrollTop = box.scrollHeight;
+
+        // Show thinking indicator
+        const thinking = document.createElement('div');
+        thinking.style.cssText = 'align-self:flex-start; max-width:85%; background:var(--bg-card); padding:10px 14px; border-radius:var(--radius-md); font-size:13px; color:var(--text-tertiary);';
+        thinking.textContent = 'GlideAI is analyzing payroll records...';
+        box.appendChild(thinking);
+        box.scrollTop = box.scrollHeight;
+
+        try {
+            const answer = await AeroDB.askGlideAI(query, this.state);
+            thinking.style.color = 'var(--text-primary)';
+            thinking.innerHTML = answer.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            box.scrollTop = box.scrollHeight;
+        } catch (err) {
+            thinking.textContent = 'Sorry, I encountered an error answering that query.';
+        }
+    },
+
+    // ─────────────────────────────────────────
+    // 7. GLOBAL CONTRACTORS & W-8BEN
+    // ─────────────────────────────────────────
+    openW8BENModal: function(empId) {
+        const emp = (this.state.employees || []).find(e => e.id === empId);
+        if (!emp) return;
+        const w8 = (this.state.w8benRecords || {})[empId] || {};
+
+        const modalHTML = `
+            <form onsubmit="AeroApp.submitW8BENForm(event, '${empId}')">
+                <div style="font-size:13px; color:var(--text-secondary); margin-bottom:16px;">
+                    IRS Form W-8BEN Certificate of Foreign Status of Beneficial Owner for United States Tax Withholding and Reporting.
+                </div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>1. Beneficial Owner Full Legal Name</label>
+                        <input type="text" class="form-control" id="w8Owner" required value="${escapeHTML(w8.beneficialOwner || emp.name)}" />
+                    </div>
+                    <div class="form-group">
+                        <label>2. Country of Citizenship</label>
+                        <input type="text" class="form-control" id="w8Country" required value="${escapeHTML(w8.country || 'United Kingdom')}" />
+                    </div>
+                    <div class="form-group">
+                        <label>3. Permanent Foreign Residence Address</label>
+                        <input type="text" class="form-control" id="w8Address" required value="${escapeHTML(w8.address || '45 Oxford St, London, UK')}" />
+                    </div>
+                    <div class="form-group">
+                        <label>4. Foreign Tax Identifying Number (FTIN)</label>
+                        <input type="text" class="form-control" id="w8FTIN" required value="${escapeHTML(w8.ftin || 'GB982341029')}" />
+                    </div>
+                    <div class="form-group" style="grid-column: 1 / -1;">
+                        <label>5. Claim of Tax Treaty Benefits (Part II)</label>
+                        <input type="text" class="form-control" id="w8Treaty" required value="${escapeHTML(w8.treatyArticle || 'Article 7 (Business Profits) - 0% Withholding')}" />
+                    </div>
+                </div>
+
+                <div style="margin-top:16px; padding:12px; background:var(--bg-secondary); border-radius:var(--radius-sm); font-size:12px; color:var(--text-secondary);">
+                    <strong>Certification:</strong> Under penalties of perjury, I declare that I am the beneficial owner of all the income to which this form relates and am not a U.S. person.
+                </div>
+
+                <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:24px;">
+                    <button type="button" class="btn btn-secondary" onclick="AeroApp.closeModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Certify Form W-8BEN ✓</button>
+                </div>
+            </form>
+        `;
+        this.openModal(`Form W-8BEN: ${emp.name}`, modalHTML, true);
+    },
+
+    submitW8BENForm: async function(e, empId) {
+        e.preventDefault();
+        const data = {
+            beneficialOwner: document.getElementById('w8Owner').value.trim(),
+            country: document.getElementById('w8Country').value.trim(),
+            address: document.getElementById('w8Address').value.trim(),
+            ftin: document.getElementById('w8FTIN').value.trim(),
+            treatyArticle: document.getElementById('w8Treaty').value.trim(),
+        };
+        await AeroDB.saveW8BENRecord(empId, data);
+        this.state.w8benRecords = await AeroDB.getW8BENRecords();
+        this.showToast('Form W-8BEN certified for cross-border tax exemption!', 'success');
+        this.closeModal();
+        this.navigateTo('global-contractors');
+    },
+
+    // ─────────────────────────────────────────
+    // 8. COMPANY DOCUMENTS & E-SIGN
+    // ─────────────────────────────────────────
+    openSignDocumentModal: function(docId) {
+        const doc = (this.state.companyDocs || []).find(d => d.id === docId);
+        if (!doc) return;
+
+        const modalHTML = `
+            <form onsubmit="AeroApp.submitDocumentSignature(event, '${docId}')">
+                <div style="padding:16px; background:var(--bg-secondary); border-radius:var(--radius-md); margin-bottom:16px; font-size:13px; line-height:1.6; max-height:220px; overflow-y:auto; border:1px solid var(--border-color);">
+                    <h4 style="margin:0 0 8px 0;">${escapeHTML(doc.title)}</h4>
+                    <p style="margin:0 0 12px 0;">${escapeHTML(doc.description)}</p>
+                    <p style="color:var(--text-secondary); margin:0;">
+                        By typing your full legal name below, you electronically certify that you have read, understand, and agree to abide by all terms and policies outlined in this document. This electronic signature carries the same legal validity as a handwritten signature under the U.S. Electronic Signatures in Global and National Commerce Act (E-SIGN).
+                    </p>
+                </div>
+
+                <div class="form-group">
+                    <label>Sign with Full Legal Name</label>
+                    <input type="text" class="form-control" id="eSignLegalName" required placeholder="e.g. Sarah Jenkins" />
+                </div>
+
+                <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:24px;">
+                    <button type="button" class="btn btn-secondary" onclick="AeroApp.closeModal()">Close</button>
+                    <button type="submit" class="btn btn-success">Sign & Acknowledge Document ✓</button>
+                </div>
+            </form>
+        `;
+        this.openModal(`E-Sign Document: ${doc.title}`, modalHTML, true);
+    },
+
+    submitDocumentSignature: async function(e, docId) {
+        e.preventDefault();
+        const empId = this.session?.employeeId || (this.state.employees || [])[0]?.id;
+        const name = document.getElementById('eSignLegalName').value.trim();
+        await AeroDB.signCompanyDocument(docId, empId, { signatureUrl: name, ipAddress: '127.0.0.1' });
+        this.state.companyDocs = await AeroDB.getCompanyDocuments();
+        this.showToast(`Document successfully signed by ${name}!`, 'success');
+        this.closeModal();
+        this.navigateTo('company-docs');
+    },
+
+    promptUploadCompanyDocument: function() {
+        const title = prompt('Enter the new policy document title:');
+        if (!title || !title.trim()) return;
+        const newDoc = {
+            id: 'doc_' + Date.now(),
+            title: title.trim(),
+            category: 'Company Policy',
+            requiredFor: 'All Active Personnel',
+            description: 'Mandatory company policy and workplace guidelines.',
+            signedCount: 0,
+            totalCount: (this.state.employees || []).length,
+            publishedAt: new Date().toISOString().slice(0, 10)
+        };
+        (this.state.companyDocs || []).push(newDoc);
+        this.showToast(`Published "${title.trim()}" to company document center!`, 'success');
+        this.navigateTo('company-docs');
+    },
+
+    // ─────────────────────────────────────────
+    // 9. PERFORMANCE REVIEWS & OKRS
+    // ─────────────────────────────────────────
+    openAddGoalModal: function() {
+        const employees = this.state.employees || [];
+        const modalHTML = `
+            <form onsubmit="AeroApp.submitAddGoal(event)">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Employee</label>
+                        <select class="form-control" id="goalEmpId" required>
+                            ${employees.map(e => `<option value="${e.id}">${escapeHTML(e.name)}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Target Quarter</label>
+                        <select class="form-control" id="goalQuarter">
+                            <option value="Q3 2026">Q3 2026</option>
+                            <option value="Q4 2026">Q4 2026</option>
+                            <option value="Q1 2027">Q1 2027</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="grid-column: 1 / -1;">
+                        <label>Objective / Key Result (OKR)</label>
+                        <input type="text" class="form-control" id="goalTitle" required placeholder="e.g. Launch Automated Stripe Payout Reconciliation" />
+                    </div>
+                    <div class="form-group">
+                        <label>Current Progress (%)</label>
+                        <input type="number" min="0" max="100" class="form-control" id="goalProgress" value="25" required />
+                    </div>
+                </div>
+
+                <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:24px;">
+                    <button type="button" class="btn btn-secondary" onclick="AeroApp.closeModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create OKR Goal</button>
+                </div>
+            </form>
+        `;
+        this.openModal('Create Employee OKR Objective', modalHTML, true);
+    },
+
+    submitAddGoal: async function(e) {
+        e.preventDefault();
+        const empId = document.getElementById('goalEmpId').value;
+        const emp = (this.state.employees || []).find(x => x.id === empId);
+        const data = {
+            empId: empId,
+            empName: emp ? emp.name : 'Employee',
+            title: document.getElementById('goalTitle').value.trim(),
+            quarter: document.getElementById('goalQuarter').value,
+            progress: parseInt(document.getElementById('goalProgress').value) || 0
+        };
+        await AeroDB.saveGoal(data);
+        this.state.goals = await AeroDB.getGoals();
+        this.showToast('OKR Objective created successfully!', 'success');
+        this.closeModal();
+        this.navigateTo('performance-reviews');
+    },
+
+    openSubmitReviewModal: function() {
+        const employees = this.state.employees || [];
+        const modalHTML = `
+            <form onsubmit="AeroApp.submitReviewForm(event)">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Employee Being Reviewed</label>
+                        <select class="form-control" id="revEmpId" required>
+                            ${employees.map(e => `<option value="${e.id}">${escapeHTML(e.name)}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Review Cycle</label>
+                        <input type="text" class="form-control" id="revCycle" value="Q3 2026 Annual Review" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Lead Reviewer</label>
+                        <input type="text" class="form-control" id="revReviewer" value="Executive Leadership" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Overall Performance Rating (1 - 5 Stars)</label>
+                        <select class="form-control" id="revRating">
+                            <option value="5.0">⭐⭐⭐⭐⭐ 5.0 - Exceptional Impact</option>
+                            <option value="4.5">⭐⭐⭐⭐ 4.5 - Exceeds Expectations</option>
+                            <option value="4.0">⭐⭐⭐⭐ 4.0 - Meets All Expectations</option>
+                            <option value="3.0">⭐⭐⭐ 3.0 - Needs Improvement</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="grid-column: 1 / -1;">
+                        <label>Proposed Annual Merit Salary Increase ($/yr)</label>
+                        <input type="number" step="500" class="form-control" id="revMerit" placeholder="e.g. 5000 (Optional)" />
+                    </div>
+                </div>
+
+                <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:24px;">
+                    <button type="button" class="btn btn-secondary" onclick="AeroApp.closeModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Submit Performance Review</button>
+                </div>
+            </form>
+        `;
+        this.openModal('Record Performance Review', modalHTML, true);
+    },
+
+    submitReviewForm: async function(e) {
+        e.preventDefault();
+        const empId = document.getElementById('revEmpId').value;
+        const emp = (this.state.employees || []).find(x => x.id === empId);
+        const data = {
+            empId: empId,
+            empName: emp ? emp.name : 'Employee',
+            cycle: document.getElementById('revCycle').value.trim(),
+            reviewer: document.getElementById('revReviewer').value.trim(),
+            rating: parseFloat(document.getElementById('revRating').value) || 5.0,
+            meritRaiseProposed: parseFloat(document.getElementById('revMerit').value) || 0
+        };
+        await AeroDB.submitPerformanceReview(data);
+        this.state.reviews = await AeroDB.getPerformanceReviews();
+        this.showToast('Performance review recorded!', 'success');
+        this.closeModal();
+        this.navigateTo('performance-reviews');
+    },
+
+    applyMeritRaise: async function(empId, raiseAmount) {
+        const emp = (this.state.employees || []).find(e => e.id === empId);
+        if (!emp) return;
+        const oldRate = emp.rate;
+        emp.rate = emp.type === 'salaried' ? (emp.rate + raiseAmount) : (emp.rate + (raiseAmount / 2080));
+        this.showToast(`Merit wage increase of +$${raiseAmount.toLocaleString()}/yr applied to ${emp.name}'s payroll profile!`, 'success');
+        this.navigateTo('performance-reviews');
     }
 };
 

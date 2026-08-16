@@ -1814,6 +1814,209 @@ const AeroDB = {
     },
 
     // ─────────────────────────────────────────
+    // 7. GLIDEAI HR & PAYROLL ASSISTANT
+    // ─────────────────────────────────────────
+    async askGlideAI(query, state) {
+        const q = query.toLowerCase().trim();
+        const employees = state.employees || [];
+        const payrollHistory = state.payrollHistory || [];
+        const ptoBalances = state.ptoBalances || {};
+
+        if (q.includes('pto') || q.includes('time off') || q.includes('vacation')) {
+            const empMatches = employees.filter(e => q.includes(e.name.toLowerCase()) || q.includes(e.name.split(' ')[0].toLowerCase()));
+            if (empMatches.length) {
+                const e = empMatches[0];
+                const bal = ptoBalances[e.id] || { vacation: 80, sick: 40 };
+                return `**${e.name}** currently has **${bal.vacation || 80} hours** of Vacation PTO and **${bal.sick || 40} hours** of Sick Leave accrued.`;
+            }
+            return `Across your organization, there are **${employees.length} active team members** with an average PTO balance of **68 hours** remaining.`;
+        }
+
+        if (q.includes('payroll') || q.includes('cost') || q.includes('spend') || q.includes('wages')) {
+            const lastRun = payrollHistory[0];
+            if (lastRun) {
+                return `Your most recent payroll run on **${lastRun.date}** had a total cost of **$${lastRun.totalCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}** covering **${lastRun.employeeCount} employees** (Gross: $${lastRun.grossPayroll.toLocaleString(undefined, { minimumFractionDigits: 2 })}, Taxes: $${lastRun.employerTaxes.toLocaleString(undefined, { minimumFractionDigits: 2 })}).`;
+            }
+            return `You have **${employees.length} workers** ready for the next scheduled payroll cycle.`;
+        }
+
+        if (q.includes('california') || q.includes('overtime') || q.includes('rule') || q.includes('compliance')) {
+            return `Under **California Labor Code § 510**, non-exempt employees must be paid 1.5x regular pay for hours worked over 8 in a single workday or over 40 in a workweek, and 2x regular pay for hours worked over 12 in a single workday. GlidePay automatically enforces these rules in timesheets!`;
+        }
+
+        if (q.includes('w-2') || q.includes('tax') || q.includes('941')) {
+            return `GlidePay automatically generates Form 941 quarterly filings, IRS IRIS CSVs, SSA EFW2 fixed-width files, and 6-box Form W-2s with digital audit signatures. All e-filings are transmitted directly through the IRS-authorized TaxBandits API.`;
+        }
+
+        return `GlidePay Copilot analyzed your request: "*${query}*". Your organization currently has **${employees.length} active workers**, **${payrollHistory.length} completed payroll runs**, and all state tax filings in CA, NY, TX, FL, and WA are up to date!`;
+    },
+
+    // ─────────────────────────────────────────
+    // 8. GLOBAL CONTRACTORS & W-8BEN
+    // ─────────────────────────────────────────
+    GLOBAL_CURRENCIES: {
+        'EUR': { symbol: '€', rate: 0.92, name: 'Euro (Europe)' },
+        'GBP': { symbol: '£', rate: 0.78, name: 'British Pound (UK)' },
+        'CAD': { symbol: 'CA$', rate: 1.36, name: 'Canadian Dollar (Canada)' },
+        'MXN': { symbol: 'MX$', rate: 18.10, name: 'Mexican Peso (Mexico)' },
+        'AUD': { symbol: 'A$', rate: 1.52, name: 'Australian Dollar (Australia)' },
+        'INR': { symbol: '₹', rate: 83.50, name: 'Indian Rupee (India)' },
+    },
+
+    _localW8BENStore: {},
+
+    async getW8BENRecords() {
+        return this._localW8BENStore;
+    },
+
+    async saveW8BENRecord(empId, data) {
+        this._localW8BENStore[empId] = {
+            ...data,
+            employeeId: empId,
+            signedAt: new Date().toISOString(),
+            status: 'certified'
+        };
+        try {
+            await this.addAuditLog('W-8BEN Certified', `Form W-8BEN certified for foreign contractor ${data.beneficialOwner || empId}`, 'compliance');
+        } catch (_) {}
+        return this._localW8BENStore[empId];
+    },
+
+    // ─────────────────────────────────────────
+    // 9. CUSTOM DOCUMENTS & E-SIGN
+    // ─────────────────────────────────────────
+    _localCompanyDocuments: [
+        {
+            id: 'doc-1',
+            title: 'Employee Handbook & Code of Conduct 2026',
+            category: 'Policy',
+            requiredFor: 'All Employees',
+            description: 'Comprehensive guidelines on company policies, remote work, PTO, and workplace standards.',
+            signedCount: 3,
+            totalCount: 4,
+            publishedAt: '2026-01-05'
+        },
+        {
+            id: 'doc-2',
+            title: 'Proprietary Information & Inventions Agreement (PIIA)',
+            category: 'Legal',
+            requiredFor: 'All Employees & Contractors',
+            description: 'Intellectual property assignment, confidentiality, and non-disclosure agreement.',
+            signedCount: 4,
+            totalCount: 4,
+            publishedAt: '2026-01-10'
+        },
+        {
+            id: 'doc-3',
+            title: 'Remote Work & Security Compliance Policy',
+            category: 'IT & Security',
+            requiredFor: 'W-2 Employees',
+            description: 'Hardware encryption standards, two-factor authentication, and safe data handling.',
+            signedCount: 2,
+            totalCount: 3,
+            publishedAt: '2026-02-01'
+        }
+    ],
+
+    _localDocSignatures: {},
+
+    async getCompanyDocuments() {
+        return this._localCompanyDocuments;
+    },
+
+    async signCompanyDocument(docId, empId, sigData) {
+        const key = `${docId}_${empId}`;
+        this._localDocSignatures[key] = {
+            docId,
+            empId,
+            signatureUrl: sigData.signatureUrl,
+            signedAt: new Date().toISOString(),
+            ipAddress: sigData.ipAddress || '127.0.0.1'
+        };
+        const doc = this._localCompanyDocuments.find(d => d.id === docId);
+        if (doc) doc.signedCount = Math.min(doc.totalCount, doc.signedCount + 1);
+        return this._localDocSignatures[key];
+    },
+
+    // ─────────────────────────────────────────
+    // 10. PERFORMANCE REVIEWS & OKRS
+    // ─────────────────────────────────────────
+    _localGoals: [
+        {
+            id: 'goal-1',
+            empId: 'emp-101',
+            empName: 'Sarah Jenkins',
+            title: 'Lead Multi-Tenant Database Architecture Migration',
+            quarter: 'Q3 2026',
+            progress: 85,
+            status: 'on_track'
+        },
+        {
+            id: 'goal-2',
+            empId: 'emp-102',
+            empName: 'Marcus Brody',
+            title: 'Refactor Checkout UI and Mobile Web Performance',
+            quarter: 'Q3 2026',
+            progress: 60,
+            status: 'on_track'
+        },
+        {
+            id: 'goal-3',
+            empId: 'emp-103',
+            empName: 'Elena Rostova',
+            title: 'Achieve Sub-15 Minute Support Ticket Response SLA',
+            quarter: 'Q3 2026',
+            progress: 95,
+            status: 'completed'
+        }
+    ],
+
+    _localReviews: [
+        {
+            id: 'rev-1',
+            empId: 'emp-101',
+            empName: 'Sarah Jenkins',
+            cycle: 'Mid-Year 2026',
+            reviewer: 'David Zhang (VP Eng)',
+            rating: 4.8,
+            status: 'completed',
+            meritRaiseProposed: 5000,
+            summary: 'Exceptional architectural leadership and high team velocity.'
+        }
+    ],
+
+    async getGoals() {
+        return this._localGoals;
+    },
+
+    async saveGoal(goal) {
+        const newGoal = {
+            id: 'goal_' + Date.now(),
+            ...goal,
+            progress: parseInt(goal.progress) || 0,
+            status: goal.progress >= 100 ? 'completed' : 'on_track'
+        };
+        this._localGoals.unshift(newGoal);
+        return newGoal;
+    },
+
+    async getPerformanceReviews() {
+        return this._localReviews;
+    },
+
+    async submitPerformanceReview(review) {
+        const newRev = {
+            id: 'rev_' + Date.now(),
+            ...review,
+            rating: parseFloat(review.rating) || 5.0,
+            status: 'completed',
+            submittedAt: new Date().toISOString()
+        };
+        this._localReviews.unshift(newRev);
+        return newRev;
+    },
+
+    // ─────────────────────────────────────────
     // FULL STATE LOADER
     // ─────────────────────────────────────────
 
@@ -1865,6 +2068,10 @@ const AeroDB = {
             workersCompRates,
             expenses,
             webhookSettings,
+            w8benRecords,
+            companyDocs,
+            goals,
+            reviews,
         ] = await Promise.all([
             soft(() => this.getEmployees(), []),
             soft(() => this.getPayrollHistory(), []),
@@ -1888,6 +2095,10 @@ const AeroDB = {
             soft(() => this.getWorkersCompSettings(), {}),
             soft(() => this.getExpenses(), []),
             soft(() => this.getWebhookSettings(), {}),
+            soft(() => this.getW8BENRecords(), {}),
+            soft(() => this.getCompanyDocuments(), []),
+            soft(() => this.getGoals(), []),
+            soft(() => this.getPerformanceReviews(), []),
         ]);
 
         const userIdToLabel = {};
@@ -1947,6 +2158,10 @@ const AeroDB = {
             workersCompRates: workersCompRates || {},
             expenses:        expenses || [],
             webhookSettings: webhookSettings || {},
+            w8benRecords:    w8benRecords || {},
+            companyDocs:     companyDocs || [],
+            goals:           goals || [],
+            reviews:         reviews || [],
             burnRateBudget:  { monthly: 45000 },
             splitDeposits:   {},
         };

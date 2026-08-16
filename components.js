@@ -5093,6 +5093,270 @@ function renderExpensesView(state) {
     `;
 }
 
+// L. Visual Interactive Org Chart
+function renderOrgChartView(state) {
+    const employees = state.employees || [];
+    const depts = {};
+    employees.forEach(emp => {
+        const d = emp.department || 'General & Administration';
+        depts[d] = depts[d] || [];
+        depts[d].push(emp);
+    });
+
+    let deptBlocks = '';
+    Object.entries(depts).forEach(([deptName, members]) => {
+        let memberCards = '';
+        members.forEach(m => {
+            const initials = m.name.split(' ').map(n=>n[0]).join('');
+            memberCards += `
+                <div class="card" style="padding:16px; min-width:220px; border-left:4px solid var(--primary); background:var(--bg-card); box-shadow:var(--shadow-sm); transition:transform 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
+                    <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
+                        <div class="avatar" style="width:36px; height:36px; font-size:13px; font-weight:700;">${escapeHTML(initials)}</div>
+                        <div>
+                            <div style="font-weight:700; font-size:14px;">${escapeHTML(m.name)}</div>
+                            <div style="font-size:12px; color:var(--text-tertiary);">${escapeHTML(m.role || 'Team Member')}</div>
+                        </div>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; color:var(--text-secondary); padding-top:8px; border-top:1px solid var(--border-color);">
+                        <span class="badge badge-info" style="font-size:10px;">${escapeHTML(m.classification.toUpperCase())}</span>
+                        <span>📍 ${escapeHTML(m.state || 'CA')}</span>
+                    </div>
+                </div>
+            `;
+        });
+
+        deptBlocks += `
+            <div style="margin-bottom:32px;">
+                <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px;">
+                    <div style="width:10px; height:10px; border-radius:50%; background:var(--primary);"></div>
+                    <h3 style="margin:0; font-size:16px; font-weight:700;">${escapeHTML(deptName)} (${members.length})</h3>
+                </div>
+                <div style="display:flex; gap:16px; flex-wrap:wrap;">
+                    ${memberCards}
+                </div>
+            </div>
+        `;
+    });
+
+    return `
+        <div class="card" style="padding:24px; margin-bottom:24px; background:linear-gradient(135deg, rgba(79,70,229,0.06), rgba(14,165,233,0.06)); border:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+            <div>
+                <div class="section-title" style="margin-bottom:4px;">Organizational Hierarchy & Team Map</div>
+                <p style="font-size:13px; color:var(--text-secondary); margin:0;">Visual department reporting structure, spans of control, and headcount distribution.</p>
+            </div>
+            <div style="display:flex; gap:12px;">
+                <button class="btn btn-outline" onclick="AeroApp.navigateTo('directory')">List View</button>
+                <button class="btn btn-primary" onclick="AeroApp.openAddEmployeeModal()">+ Add Team Member</button>
+            </div>
+        </div>
+
+        <div style="padding:12px 0;">
+            ${deptBlocks || '<div class="card" style="padding:40px; text-align:center; color:var(--text-tertiary);">No employees in organization.</div>'}
+        </div>
+    `;
+}
+
+// M. Global Contractors & Form W-8BEN (50+ Countries)
+function renderGlobalContractorsView(state) {
+    const contractors = (state.employees || []).filter(e => e.classification === '1099');
+    const currencies = {
+        'EUR': { symbol: '€', rate: 0.92, name: 'Euro' },
+        'GBP': { symbol: '£', rate: 0.78, name: 'British Pound' },
+        'CAD': { symbol: 'CA$', rate: 1.36, name: 'Canadian Dollar' },
+        'MXN': { symbol: 'MX$', rate: 18.10, name: 'Mexican Peso' },
+        'AUD': { symbol: 'A$', rate: 1.52, name: 'Australian Dollar' },
+        'INR': { symbol: '₹', rate: 83.50, name: 'Indian Rupee' },
+    };
+    const w8benMap = state.w8benRecords || {};
+
+    let rows = '';
+    contractors.forEach(c => {
+        const hasW8 = !!w8benMap[c.id];
+        const curr = currencies[c.currency || 'EUR'] || currencies['EUR'];
+        const converted = ((c.rate || 45) * 80 * curr.rate).toFixed(2);
+        rows += `
+            <tr>
+                <td style="font-weight:600;">${escapeHTML(c.name)}</td>
+                <td>${escapeHTML(c.country || 'United Kingdom')}</td>
+                <td><span class="badge badge-info">${curr.symbol} ${curr.name}</span></td>
+                <td>$${c.rate || 45}/hr USD (≈ ${curr.symbol}${converted} / bi-wk)</td>
+                <td><span class="badge ${hasW8 ? 'badge-success' : 'badge-warning'}">${hasW8 ? 'W-8BEN Certified ✓' : 'W-8BEN Pending'}</span></td>
+                <td style="text-align:right;">
+                    <button class="btn btn-outline" style="padding:4px 10px; font-size:12px;" onclick="AeroApp.openW8BENModal('${c.id}')">${hasW8 ? 'View W-8BEN' : 'Certify W-8BEN'}</button>
+                </td>
+            </tr>
+        `;
+    });
+
+    return `
+        <div class="grid-stats" style="margin-bottom:24px;">
+            <div class="card stat-card">
+                <span class="stat-label">Cross-Border Rails</span>
+                <span class="stat-value">50+ Countries</span>
+                <span class="stat-trend up">Stripe Global Payouts</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">Supported Currencies</span>
+                <span class="stat-value">EUR, GBP, CAD, MXN, AUD, INR</span>
+                <span class="stat-trend up">Real-time FX lock</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">IRS Form W-8BEN Status</span>
+                <span class="stat-value">${Object.keys(w8benMap).length} / ${contractors.length}</span>
+                <span class="stat-trend ${Object.keys(w8benMap).length === contractors.length ? 'up' : ''}">Tax Treaty Compliant</span>
+            </div>
+        </div>
+
+        <div class="card table-card">
+            <div class="section-title" style="padding:20px 24px 0 24px;">International Contractor Roster (Cross-Border Payouts)</div>
+            <div class="table-wrapper">
+                <table class="table-responsive">
+                    <thead><tr><th>Contractor</th><th>Country</th><th>Payout Currency</th><th>Comp Rate (Local FX)</th><th>Tax Treaty Status</th><th style="text-align:right;">Action</th></tr></thead>
+                    <tbody>${rows || '<tr><td colspan="6" style="text-align:center; padding:40px; color:var(--text-tertiary);">No international contractors configured.</td></tr>'}</tbody>
+                </table>
+            </div>
+        </div>
+    `;
+}
+
+// N. Custom Company Documents & E-Sign Workflows
+function renderCompanyDocumentsView(state) {
+    const docs = state.companyDocs || [];
+    let rows = '';
+    docs.forEach(d => {
+        const isComplete = d.signedCount >= d.totalCount;
+        rows += `
+            <tr>
+                <td style="font-weight:600;">📄 ${escapeHTML(d.title)}</td>
+                <td><span class="badge badge-info">${escapeHTML(d.category)}</span></td>
+                <td>${escapeHTML(d.requiredFor)}</td>
+                <td>${escapeHTML(d.publishedAt)}</td>
+                <td>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="font-weight:700;">${d.signedCount} / ${d.totalCount}</span>
+                        <div style="flex:1; height:6px; background:var(--border-color); border-radius:3px; overflow:hidden; min-width:60px;">
+                            <div style="height:100%; width:${(d.signedCount / d.totalCount) * 100}%; background:var(--${isComplete ? 'success' : 'primary'});"></div>
+                        </div>
+                    </div>
+                </td>
+                <td style="text-align:right;">
+                    <button class="btn btn-outline" style="padding:4px 10px; font-size:12px;" onclick="AeroApp.openSignDocumentModal('${d.id}')">Review &amp; E-Sign</button>
+                </td>
+            </tr>
+        `;
+    });
+
+    return `
+        <div class="card" style="padding:24px; margin-bottom:24px; background:linear-gradient(135deg, rgba(79,70,229,0.06), rgba(16,185,129,0.06)); border:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+            <div>
+                <div class="section-title" style="margin-bottom:4px;">Company Policies &amp; E-Signature Center</div>
+                <p style="font-size:13px; color:var(--text-secondary); margin:0;">Distribute employee handbooks, NDAs, and remote work agreements with legally-binding electronic signatures.</p>
+            </div>
+            <button class="btn btn-primary" onclick="AeroApp.promptUploadCompanyDocument()">+ Add Policy Document</button>
+        </div>
+
+        <div class="card table-card">
+            <div class="section-title" style="padding:20px 24px 0 24px;">Required Company Documents (${docs.length})</div>
+            <div class="table-wrapper">
+                <table class="table-responsive">
+                    <thead><tr><th>Document Title</th><th>Category</th><th>Assigned To</th><th>Published</th><th>Completion Status</th><th style="text-align:right;">Action</th></tr></thead>
+                    <tbody>${rows || '<tr><td colspan="6" style="text-align:center; padding:40px; color:var(--text-tertiary);">No policy documents uploaded.</td></tr>'}</tbody>
+                </table>
+            </div>
+        </div>
+    `;
+}
+
+// O. Performance Reviews, 1-on-1s & OKR Goal Tracking
+function renderPerformanceReviewsView(state) {
+    const goals = state.goals || [];
+    const reviews = state.reviews || [];
+
+    let goalRows = '';
+    goals.forEach(g => {
+        goalRows += `
+            <tr>
+                <td style="font-weight:600;">${escapeHTML(g.empName)}</td>
+                <td>${escapeHTML(g.title)}</td>
+                <td><span class="badge badge-info">${escapeHTML(g.quarter)}</span></td>
+                <td>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="font-weight:700; width:35px;">${g.progress}%</span>
+                        <div style="flex:1; height:6px; background:var(--border-color); border-radius:3px; overflow:hidden; min-width:80px;">
+                            <div style="height:100%; width:${g.progress}%; background:var(--${g.progress >= 100 ? 'success' : 'primary'});"></div>
+                        </div>
+                    </div>
+                </td>
+                <td><span class="badge badge-${g.progress >= 100 ? 'success' : 'warning'}">${g.progress >= 100 ? 'Achieved ✓' : 'In Progress'}</span></td>
+            </tr>
+        `;
+    });
+
+    let reviewRows = '';
+    reviews.forEach(r => {
+        reviewRows += `
+            <tr>
+                <td style="font-weight:600;">${escapeHTML(r.empName)}</td>
+                <td>${escapeHTML(r.cycle)}</td>
+                <td>${escapeHTML(r.reviewer)}</td>
+                <td style="font-weight:700; color:var(--warning);">⭐ ${r.rating} / 5.0</td>
+                <td>${r.meritRaiseProposed ? `+$${r.meritRaiseProposed.toLocaleString()}/yr` : '—'}</td>
+                <td style="text-align:right;">
+                    ${r.meritRaiseProposed ? `
+                        <button class="btn btn-outline" style="padding:3px 8px; font-size:11px; color:var(--success); border-color:var(--success);" onclick="AeroApp.applyMeritRaise('${r.empId}', ${r.meritRaiseProposed})">Apply Merit Wage Sync</button>
+                    ` : '<span style="font-size:12px; color:var(--text-tertiary);">Recorded</span>'}
+                </td>
+            </tr>
+        `;
+    });
+
+    return `
+        <div class="grid-stats" style="margin-bottom:24px;">
+            <div class="card stat-card">
+                <span class="stat-label">Active Team OKRs</span>
+                <span class="stat-value">${goals.length} Goals</span>
+                <span class="stat-trend up">Q3 Objectives</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">Completed Reviews</span>
+                <span class="stat-value">${reviews.length} Evaluated</span>
+                <span class="stat-trend up">360° Review Cycle</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">Merit Salary Link</span>
+                <span class="stat-value" style="color:var(--success);">Automated</span>
+                <span class="stat-trend up">Direct payroll sync</span>
+            </div>
+        </div>
+
+        <div class="card table-card" style="margin-bottom:24px;">
+            <div class="section-title" style="padding:20px 24px 0 24px; display:flex; justify-content:space-between; align-items:center;">
+                <span>Quarterly Goal &amp; OKR Progress Tracker</span>
+                <button class="btn btn-primary" style="font-size:12px;" onclick="AeroApp.openAddGoalModal()">+ Create Employee OKR</button>
+            </div>
+            <div class="table-wrapper">
+                <table class="table-responsive">
+                    <thead><tr><th>Employee</th><th>Objective</th><th>Quarter</th><th>Progress</th><th>Status</th></tr></thead>
+                    <tbody>${goalRows || '<tr><td colspan="5" style="text-align:center; padding:40px; color:var(--text-tertiary);">No goals tracked yet.</td></tr>'}</tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card table-card">
+            <div class="section-title" style="padding:20px 24px 0 24px; display:flex; justify-content:space-between; align-items:center;">
+                <span>Performance Review Cycles &amp; Merit Raises</span>
+                <button class="btn btn-outline" style="font-size:12px;" onclick="AeroApp.openSubmitReviewModal()">+ Record Review</button>
+            </div>
+            <div class="table-wrapper">
+                <table class="table-responsive">
+                    <thead><tr><th>Employee</th><th>Review Cycle</th><th>Lead Reviewer</th><th>Overall Rating</th><th>Merit Raise</th><th style="text-align:right;">Actions</th></tr></thead>
+                    <tbody>${reviewRows || '<tr><td colspan="6" style="text-align:center; padding:40px; color:var(--text-tertiary);">No review cycles recorded.</td></tr>'}</tbody>
+                </table>
+            </div>
+        </div>
+    `;
+}
+
 // Export UI Renderers
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
@@ -5135,7 +5399,12 @@ if (typeof module !== 'undefined' && module.exports) {
         renderTimeClockView,
         renderTabletKioskView,
         renderWorkersCompView,
-        renderExpensesView
+        renderExpensesView,
+        renderOrgChartView,
+        renderGlobalContractorsView,
+        renderCompanyDocumentsView,
+        renderPerformanceReviewsView
     };
 }
+
 
