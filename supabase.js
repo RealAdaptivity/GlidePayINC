@@ -477,16 +477,17 @@ const AeroDB = {
 
     /** Return all active employees for the current company. */
     async getEmployees() {
+        const company = await this.getCompany();
         const rows = _check(
-            await _sb.from('employees').select('*').eq('is_active', true).order('name'),
+            await _sb.from('employees')
+                .select('*')
+                .eq('company_id', company.id)
+                .eq('is_active', true)
+                .order('name'),
             'getEmployees'
         );
         if (!rows?.length) {
-            const company = await this.getCompany().catch(() => null);
-            if (company?.id) {
-                return await this.seedStarterEmployees(company.id);
-            }
-            return [];
+            return await this.seedStarterEmployees(company.id);
         }
         const employees = rows.map(_toAppEmployee);
 
@@ -764,13 +765,13 @@ const AeroDB = {
         });
 
         // Insert one line item per employee with validated tenant IDs
-        const lineItems = Object.entries(activeRunData).map(([empId, data]) => {
+        const lineItems = Object.entries(activeRunData).map(([empId, data], idx) => {
             const r = data.results;
             const emp = data.employee || {};
             const resolvedEmp = empMap[empId]
                 || (emp.email && empMap[emp.email.toLowerCase()])
                 || (emp.name && empMap[emp.name.toLowerCase()])
-                || dbEmployees[0];
+                || (dbEmployees.length ? dbEmployees[idx % dbEmployees.length] : null);
 
             const validEmployeeId = resolvedEmp ? resolvedEmp.id : empId;
 
