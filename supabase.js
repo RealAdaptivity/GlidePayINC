@@ -2688,6 +2688,126 @@ const AeroDB = {
     },
 
     // ─────────────────────────────────────────
+    // 26. PLATFORM UNDERWRITING & ACCOUNT APPROVALS
+    // ─────────────────────────────────────────
+    _localUnderwritingAccounts: [
+        {
+            id: 'uw-101',
+            companyName: 'Beacon Health Logistics LLC',
+            ein: '98-7654321',
+            state: 'TX',
+            industry: 'Healthcare & Freight (NAICS 6219)',
+            ownerName: 'Marcus Vance',
+            ownerEmail: 'm.vance@beaconhealth.co',
+            bankName: 'JPMorgan Chase (Checking ••••4912)',
+            bankVerified: true,
+            nachaAuth: true,
+            einVerified: true,
+            riskTier: 'escrow_4day',
+            creditLimit: 75000,
+            status: 'pending_review',
+            submittedAt: '2026-08-14 09:30 AM',
+            notes: 'Awaiting final risk officer sign-off on 4-day ACH limit'
+        },
+        {
+            id: 'uw-102',
+            companyName: 'Pacific Coast Construction LLC',
+            ein: '33-8899001',
+            state: 'CA',
+            industry: 'Commercial Construction (NAICS 2362)',
+            ownerName: 'David Bradley',
+            ownerEmail: 'bradley@pacificcoastbuild.com',
+            bankName: 'Wells Fargo (Checking ••••8821)',
+            bankVerified: true,
+            nachaAuth: false,
+            einVerified: true,
+            riskTier: 'escrow_4day',
+            creditLimit: 50000,
+            status: 'docs_requested',
+            submittedAt: '2026-08-12 02:15 PM',
+            notes: 'Requested official CP 575 EIN letter and signed NACHA authorization agreement'
+        },
+        {
+            id: 'uw-103',
+            companyName: 'Apex Cloud Systems Inc.',
+            ein: '12-3456789',
+            state: 'DE',
+            industry: 'Software / SaaS (NAICS 5415)',
+            ownerName: 'Sarah Jenkins',
+            ownerEmail: 'sarah@apexcloud.io',
+            bankName: 'Silicon Valley Bank (Checking ••••3319)',
+            bankVerified: true,
+            nachaAuth: true,
+            einVerified: true,
+            riskTier: 'standard_2day',
+            creditLimit: 150000,
+            status: 'approved',
+            submittedAt: '2026-08-01 11:00 AM',
+            notes: 'Fully verified. Approved for 2-Day Next-Day ACH processing'
+        },
+        {
+            id: 'uw-104',
+            companyName: 'Vanguard Global Advisory Corp',
+            ein: '45-6789012',
+            state: 'NY',
+            industry: 'Management Consulting (NAICS 5416)',
+            ownerName: 'Victoria Sterling',
+            ownerEmail: 'v.sterling@vanguardadvisory.com',
+            bankName: 'Bank of America (Checking ••••1092)',
+            bankVerified: true,
+            nachaAuth: true,
+            einVerified: true,
+            riskTier: 'instant_rtp',
+            creditLimit: 300000,
+            status: 'approved',
+            submittedAt: '2026-07-20 04:45 PM',
+            notes: 'Enterprise account. Approved for Instant RTP Same-Day settlement'
+        }
+    ],
+
+    async getUnderwritingQueue() {
+        return this._localUnderwritingAccounts;
+    },
+
+    async approveCompanyAccount(companyId, riskTier, creditLimit) {
+        const acc = this._localUnderwritingAccounts.find(a => a.id === companyId);
+        if (acc) {
+            acc.status = 'approved';
+            if (riskTier) acc.riskTier = riskTier;
+            if (creditLimit) acc.creditLimit = parseFloat(creditLimit);
+            acc.reviewedBy = 'Platform Risk Admin';
+            try {
+                await this.addAuditLog('Company Account Approved', `Approved ${acc.companyName} (Tier: ${acc.riskTier}, Limit: $${acc.creditLimit.toLocaleString()})`, 'admin');
+            } catch (_) {}
+        }
+        return acc;
+    },
+
+    async requestCompanyDocs(companyId, reason) {
+        const acc = this._localUnderwritingAccounts.find(a => a.id === companyId);
+        if (acc) {
+            acc.status = 'docs_requested';
+            acc.notes = reason || 'Additional documentation requested by platform underwriting team';
+            try {
+                await this.addAuditLog('Underwriting Docs Requested', `Requested documents for ${acc.companyName}: ${acc.notes}`, 'admin');
+            } catch (_) {}
+        }
+        return acc;
+    },
+
+    async suspendCompanyAccount(companyId, reason) {
+        const acc = this._localUnderwritingAccounts.find(a => a.id === companyId);
+        if (acc) {
+            acc.status = 'suspended';
+            acc.notes = reason || 'Suspended by platform risk operations';
+            try {
+                await this.addAuditLog('Company Account Suspended', `Risk hold placed on ${acc.companyName}: ${acc.notes}`, 'admin');
+            } catch (_) {}
+        }
+        return acc;
+    },
+
+    // ─────────────────────────────────────────
     // FULL STATE LOADER
     // ─────────────────────────────────────────
 
@@ -2758,6 +2878,7 @@ const AeroDB = {
             commuterBenefits,
             hsaClaims,
             certifications,
+            underwritingQueue,
         ] = await Promise.all([
             soft(() => this.getEmployees(), []),
             soft(() => this.getPayrollHistory(), []),
@@ -2800,6 +2921,7 @@ const AeroDB = {
             soft(() => this.getCommuterBenefits(), {}),
             soft(() => this.getHSAClaims(), []),
             soft(() => this.getEmployeeCertifications(), []),
+            soft(() => this.getUnderwritingQueue(), []),
         ]);
 
         const userIdToLabel = {};
@@ -2878,6 +3000,7 @@ const AeroDB = {
             commuterBenefits: commuterBenefits || {},
             hsaClaims:       hsaClaims || [],
             certifications:  certifications || [],
+            underwritingQueue: underwritingQueue || [],
             burnRateBudget:  { monthly: 45000 },
             splitDeposits:   {},
         };

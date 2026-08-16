@@ -6605,6 +6605,106 @@ function renderCertificationsVaultView(state) {
     `;
 }
 
+// HH. Platform Super-Admin Underwriting & Account Approval Console
+function renderPlatformUnderwritingView(state) {
+    const queue = state.underwritingQueue || [];
+    const pendingCount = queue.filter(q => q.status === 'pending_review').length;
+    const approvedCount = queue.filter(q => q.status === 'approved').length;
+    const totalCreditExposure = queue.filter(q => q.status === 'approved').reduce((sum, q) => sum + (q.creditLimit || 0), 0);
+
+    const tierLabels = {
+        'standard_2day': '2-Day Next-Day ACH',
+        'escrow_4day': '4-Day Prefunded Escrow',
+        'instant_rtp': 'Instant RTP / FedNow'
+    };
+
+    let rows = '';
+    queue.forEach(acc => {
+        let badgeClass = 'badge-success';
+        let statusLabel = 'Approved &amp; Live ✓';
+        if (acc.status === 'pending_review') {
+            badgeClass = 'badge-warning';
+            statusLabel = 'Pending Underwriting ⏳';
+        } else if (acc.status === 'docs_requested') {
+            badgeClass = 'badge-info';
+            statusLabel = 'Docs Requested 📑';
+        } else if (acc.status === 'suspended') {
+            badgeClass = 'badge-danger';
+            statusLabel = 'Risk Hold / Suspended 🔴';
+        }
+
+        const tierName = tierLabels[acc.riskTier] || acc.riskTier;
+
+        rows += `
+            <tr>
+                <td>
+                    <div style="font-weight:700; color:var(--text-primary); font-size:14px;">${escapeHTML(acc.companyName)}</div>
+                    <div style="font-size:11px; color:var(--text-secondary); margin-top:2px;">EIN: <span style="font-family:monospace;">${escapeHTML(acc.ein)}</span> &bull; State: <strong>${escapeHTML(acc.state)}</strong></div>
+                </td>
+                <td>
+                    <div style="font-weight:600; font-size:12px;">${escapeHTML(acc.ownerName)}</div>
+                    <div style="font-size:11px; color:var(--text-tertiary);">${escapeHTML(acc.ownerEmail)}</div>
+                </td>
+                <td>
+                    <div style="display:flex; flex-direction:column; gap:3px;">
+                        <span class="badge ${acc.einVerified ? 'badge-success' : 'badge-danger'}" style="font-size:10px; width:fit-content;">${acc.einVerified ? 'EIN Verified (IRS) ✓' : 'Unverified EIN'}</span>
+                        <span class="badge ${acc.bankVerified ? 'badge-success' : 'badge-warning'}" style="font-size:10px; width:fit-content;">${acc.bankVerified ? 'Bank Auth Active ✓' : 'Bank Pending'}</span>
+                        <span class="badge ${acc.nachaAuth ? 'badge-success' : 'badge-warning'}" style="font-size:10px; width:fit-content;">${acc.nachaAuth ? 'NACHA Signed ✓' : 'NACHA Missing'}</span>
+                    </div>
+                </td>
+                <td>
+                    <div style="font-weight:700; color:var(--primary); font-size:12px;">${escapeHTML(tierName)}</div>
+                    <div style="font-size:11px; color:var(--text-secondary);">Limit: <strong>${formatCurrency(acc.creditLimit || 0)}</strong>/run</div>
+                </td>
+                <td><span class="badge ${badgeClass}">${statusLabel}</span></td>
+                <td style="text-align:right;">
+                    <button class="btn btn-outline" style="padding:4px 8px; font-size:11px;" onclick="AeroApp.openUnderwritingDetailModal('${acc.id}')">Review Dossier 🔍</button>
+                </td>
+            </tr>
+        `;
+    });
+
+    return `
+        <div class="grid-stats" style="margin-bottom:24px;">
+            <div class="card stat-card">
+                <span class="stat-label">Applications Pending Underwriting</span>
+                <span class="stat-value" style="color:var(--warning);">${pendingCount} Pending</span>
+                <span class="stat-trend">Review &amp; sign-off required</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">Active Approved Employers</span>
+                <span class="stat-value" style="color:var(--success);">${approvedCount} Companies</span>
+                <span class="stat-trend up">Live ACH &amp; RTP rails</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">Total Payroll Credit Exposure</span>
+                <span class="stat-value">${formatCurrency(totalCreditExposure)}</span>
+                <span class="stat-trend up">Aggregate cycle limits</span>
+            </div>
+        </div>
+
+        <div class="card" style="padding:24px; margin-bottom:24px; background:linear-gradient(135deg, rgba(79,70,229,0.06), rgba(16,185,129,0.06)); border:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+            <div>
+                <div class="section-title" style="margin-bottom:4px;">🛡️ Super-Admin Underwriting &amp; Account Approval Mission Control</div>
+                <p style="font-size:13px; color:var(--text-secondary); margin:0;">KYB identity verification, IRS EIN CP 575 validation, NACHA electronic signature audits, and per-run ACH credit risk tiering.</p>
+            </div>
+            <div style="display:flex; gap:8px;">
+                <button class="btn btn-outline" onclick="AeroApp.showToast('KYB Automated Webhook Sync Triggered with FinCEN Registry', 'info')">Sync FinCEN API 🔄</button>
+            </div>
+        </div>
+
+        <div class="card table-card">
+            <div class="section-title" style="padding:20px 24px 0 24px;">Employer Underwriting Queue</div>
+            <div class="table-wrapper">
+                <table class="table-responsive">
+                    <thead><tr><th>Company / EIN</th><th>Beneficial Owner</th><th>KYB &amp; NACHA Verification</th><th>Processing Tier &amp; Limit</th><th>Account Status</th><th style="text-align:right;">Underwrite</th></tr></thead>
+                    <tbody>${rows || '<tr><td colspan="6" style="text-align:center; padding:40px; color:var(--text-tertiary);">No companies currently in underwriting queue.</td></tr>'}</tbody>
+                </table>
+            </div>
+        </div>
+    `;
+}
+
 // Export UI Renderers
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
@@ -6670,7 +6770,8 @@ if (typeof module !== 'undefined' && module.exports) {
         renderCommuterBenefitsView,
         renderQRAttendanceKioskView,
         renderHSAFSAClaimsView,
-        renderCertificationsVaultView
+        renderCertificationsVaultView,
+        renderPlatformUnderwritingView
     };
 }
 

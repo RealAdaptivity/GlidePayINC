@@ -915,6 +915,11 @@ const AeroApp = {
                 subtitleText = "Encrypted storage and expiration watchdog for professional licenses and credentials";
                 htmlContent = renderCertificationsVaultView(this.state);
                 break;
+            case 'platform-underwriting':
+                titleText = "Platform Underwriting & Approvals";
+                subtitleText = "Super-admin employer KYB identity verification, NACHA compliance, and ACH risk tiering";
+                htmlContent = renderPlatformUnderwritingView(this.state);
+                break;
         }
 
         if (titleEl) titleEl.textContent = titleText;
@@ -5162,6 +5167,114 @@ const AeroApp = {
         this.showToast(`Added ${data.name} to secure credential vault!`, 'success');
         this.closeModal();
         this.navigateTo('certifications-vault');
+    },
+
+    // ─────────────────────────────────────────
+    // 24. PLATFORM UNDERWRITING HANDLERS
+    // ─────────────────────────────────────────
+    openUnderwritingDetailModal: function(companyId) {
+        const acc = (this.state.underwritingQueue || []).find(a => a.id === companyId);
+        if (!acc) return;
+
+        const modalHTML = `
+            <div style="display:flex; flex-direction:column; gap:16px;">
+                <div style="background:var(--bg-secondary); padding:16px; border-radius:8px; border:1px solid var(--border-color);">
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; font-size:13px;">
+                        <div><strong>Legal Name:</strong> ${escapeHTML(acc.companyName)}</div>
+                        <div><strong>Federal EIN:</strong> <span style="font-family:monospace;">${escapeHTML(acc.ein)}</span></div>
+                        <div><strong>Industry:</strong> ${escapeHTML(acc.industry)}</div>
+                        <div><strong>Jurisdiction:</strong> ${escapeHTML(acc.state)}, USA</div>
+                        <div><strong>Beneficial Owner:</strong> ${escapeHTML(acc.ownerName)} (${escapeHTML(acc.ownerEmail)})</div>
+                        <div><strong>Corporate Bank:</strong> ${escapeHTML(acc.bankName)}</div>
+                    </div>
+                </div>
+
+                <div style="border:1px solid var(--border-color); border-radius:8px; padding:16px;">
+                    <div style="font-weight:700; margin-bottom:8px; font-size:13px;">Underwriting Risk Controls &amp; Settings:</div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Assigned Settlement Tier</label>
+                            <select class="form-control" id="uwRiskTierSelect">
+                                <option value="standard_2day" ${acc.riskTier === 'standard_2day' ? 'selected' : ''}>Standard 2-Day Next-Day ACH</option>
+                                <option value="escrow_4day" ${acc.riskTier === 'escrow_4day' ? 'selected' : ''}>4-Day Prefunded Escrow (Higher Risk)</option>
+                                <option value="instant_rtp" ${acc.riskTier === 'instant_rtp' ? 'selected' : ''}>Instant RTP / FedNow (Verified Enterprise)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Single-Cycle Credit Limit ($)</label>
+                            <input type="number" class="form-control" id="uwCreditLimitInput" value="${acc.creditLimit || 50000}" />
+                        </div>
+                    </div>
+                </div>
+
+                <div style="font-size:12px; color:var(--text-secondary);">
+                    <strong>Underwriting Notes / Audit Trail:</strong>
+                    <div style="background:var(--bg-primary); padding:8px 12px; border-radius:4px; margin-top:4px; font-family:monospace;">
+                        ${escapeHTML(acc.notes || 'No flags on record.')}
+                    </div>
+                </div>
+
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px; flex-wrap:wrap; gap:8px;">
+                    <div style="display:flex; gap:8px;">
+                        <button class="btn btn-outline" style="color:var(--warning); border-color:var(--warning);" onclick="AeroApp.openRequestDocsModal('${acc.id}')">Request More Docs 📑</button>
+                        <button class="btn btn-outline" style="color:var(--danger); border-color:var(--danger);" onclick="AeroApp.suspendUnderwritingAccount('${acc.id}')">Risk Hold / Suspend 🔴</button>
+                    </div>
+                    <div style="display:flex; gap:8px;">
+                        <button class="btn btn-secondary" onclick="AeroApp.closeModal()">Close</button>
+                        <button class="btn btn-primary" onclick="AeroApp.approveUnderwritingAccount('${acc.id}')">Approve Account for Live Direct Deposit 🟢</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        this.openModal(`Underwriting Dossier: ${acc.companyName}`, modalHTML, true);
+    },
+
+    approveUnderwritingAccount: async function(companyId) {
+        const tier = document.getElementById('uwRiskTierSelect')?.value || 'standard_2day';
+        const limit = parseFloat(document.getElementById('uwCreditLimitInput')?.value) || 50000;
+
+        await AeroDB.approveCompanyAccount(companyId, tier, limit);
+        this.state.underwritingQueue = await AeroDB.getUnderwritingQueue();
+        this.showToast('Company approved for live direct deposit & tax filing!', 'success');
+        this.closeModal();
+        this.navigateTo('platform-underwriting');
+    },
+
+    openRequestDocsModal: function(companyId) {
+        const acc = (this.state.underwritingQueue || []).find(a => a.id === companyId);
+        if (!acc) return;
+
+        const modalHTML = `
+            <form onsubmit="AeroApp.submitRequestDocs(event, '${companyId}')">
+                <div class="form-group">
+                    <label>Required Verification Documents</label>
+                    <textarea class="form-control" id="uwRequestReason" rows="3" required placeholder="e.g. Please upload IRS CP 575 Notice and voided business check to verify bank ownership."></textarea>
+                </div>
+                <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:20px;">
+                    <button type="button" class="btn btn-secondary" onclick="AeroApp.closeModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Send Document Request 📑</button>
+                </div>
+            </form>
+        `;
+        this.openModal(`Request Verification Documents: ${acc.companyName}`, modalHTML, true);
+    },
+
+    submitRequestDocs: async function(e, companyId) {
+        e.preventDefault();
+        const reason = document.getElementById('uwRequestReason').value;
+        await AeroDB.requestCompanyDocs(companyId, reason);
+        this.state.underwritingQueue = await AeroDB.getUnderwritingQueue();
+        this.showToast('Document request sent to company administrator!', 'info');
+        this.closeModal();
+        this.navigateTo('platform-underwriting');
+    },
+
+    suspendUnderwritingAccount: async function(companyId) {
+        await AeroDB.suspendCompanyAccount(companyId, 'Suspended by platform risk officer pending enhanced due diligence');
+        this.state.underwritingQueue = await AeroDB.getUnderwritingQueue();
+        this.showToast('Risk hold placed. Live disbursements frozen.', 'warning');
+        this.closeModal();
+        this.navigateTo('platform-underwriting');
     }
 };
 
