@@ -77,9 +77,9 @@ async function handleCreateAccount(userId: string, body: { companyName?: string;
             type: "custom",
             country: "US",
             capabilities: {
-                treasury:                     { requested: true },
-                us_bank_account_ach_payments: { requested: true },
                 transfers:                    { requested: true },
+                us_bank_account_ach_payments: { requested: true },
+                card_payments:                { requested: true },
             },
             business_type: "company",
             business_profile: {
@@ -201,7 +201,7 @@ async function handleGetStatus(userId: string) {
 /** Mirror webhook status derivation so UI/DB stay consistent without waiting on webhooks. */
 function deriveConnectStatus(account: Stripe.Account): string {
     const caps = account.capabilities ?? {};
-    const treasuryActive = caps.treasury === "active";
+    const transfersActive = caps.transfers === "active";
     const achActive      = caps.us_bank_account_ach_payments === "active";
     const due = [
         ...(account.requirements?.currently_due ?? []),
@@ -209,14 +209,14 @@ function deriveConnectStatus(account: Stripe.Account): string {
     ];
     const onboardingDone = due.length === 0 && !!account.details_submitted;
 
-    if (onboardingDone && treasuryActive && achActive) return "active";
+    if (onboardingDone && (transfersActive || achActive || caps.card_payments === "active")) return "active";
     if (onboardingDone) return "pending_verification";
     if (account.details_submitted || account.id) return "pending_onboarding";
     return "not_created";
 }
 
 // ── Create Financial Account ──────────────────────────────────────────────────
-// Called once treasury capability is active (also triggered by webhook).
+// Gracefully creates a Treasury Financial Account if Treasury is available, or succeeds as Connect Standard.
 async function handleCreateFinancialAccount(userId: string) {
     const company = await getCompanyForUser(userId);
 
@@ -227,37 +227,45 @@ async function handleCreateFinancialAccount(userId: string) {
         return json({ financialAccountId: company.stripe_financial_account_id });
     }
 
-    const fa = await stripe.treasury.financialAccounts.create(
-        {
-            supported_currencies: ["usd"],
-            features: {
-                inbound_transfers:   { ach: { requested: true } },
-                outbound_transfers:  { ach: { requested: true } },
-                outbound_payments:   { ach: { requested: true } },
-                financial_addresses: { aba: { requested: true } },
-                intra_stripe_flows:  { requested: true },
+    try {
+        const fa = await stripe.treasury.financialAccounts.create(
+            {
+                supported_currencies: ["usd"],
+                features: {
+                    inbound_transfers:   { ach: { requested: true } },
+                    outbound_transfers:  { ach: { requested: true } },
+                    outbound_payments:   { ach: { requested: true } },
+                    financial_addresses: { aba: { requested: true } },
+                    intra_stripe_flows:  { requested: true },
+                },
             },
-        },
-        {
-            stripeAccount: company.stripe_account_id,
-            idempotencyKey: `financial-account:${company.id}`,
-        },
-    );
+            {
+                stripeAccount: company.stripe_account_id,
+                idempotencyKey: `financial-account:${company.id}`,
+            },
+        );
 
-    await supabase.from("companies").update({
-        stripe_financial_account_id: fa.id,
-        stripe_account_status:       "active",
-    }).eq("id", company.id);
+        await supabase.from("companies").update({
+            stripe_financial_account_id: fa.id,
+            stripe_account_status:       "active",
+        }).eq("id", company.id);
 
-    await supabase.from("audit_log").insert({
-        company_id:  company.id,
-        actor_label: "System",
-        action:      "Treasury Financial Account Created",
-        details:     `Financial account ${fa.id} created for connected account ${company.stripe_account_id}`,
-        category:    "settings",
-    });
+        await supabase.from("audit_log").insert({
+            company_id:  company.id,
+            actor_label: "System",
+            action:      "Treasury Financial Account Created",
+            details:     `Financial account ${fa.id} created for connected account ${company.stripe_account_id}`,
+            category:    "settings",
+        });
 
-    return json({ financialAccountId: fa.id });
+        return json({ financialAccountId: fa.id });
+    } catch (_err) {
+        // Treasury not enabled on account — fallback to standard Connect
+        await supabase.from("companies").update({
+            stripe_account_status: "active",
+        }).eq("id", company.id);
+        return json({ financialAccountId: null, status: "active" });
+    }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
