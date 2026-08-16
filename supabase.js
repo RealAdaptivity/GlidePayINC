@@ -702,10 +702,12 @@ const AeroDB = {
 
     /** Return all payroll runs for the current company, newest first. */
     async getPayrollHistory() {
+        const company = await this.getCompany();
         const runs = _check(
             await _sb.from('payroll_runs')
                 .select('*')
-                .order('run_date', { ascending: false }),
+                .eq('company_id', company.id)
+                .order('created_at', { ascending: false }),
             'getPayrollHistory'
         );
 
