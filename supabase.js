@@ -2572,6 +2572,43 @@ const AeroDB = {
     },
 
     // ─────────────────────────────────────────
+    // 23. COMMUTER & TRANSIT BENEFITS (SEC 132)
+    // ─────────────────────────────────────────
+    _localCommuterBenefits: {
+        'emp-101': { transitPass: 150.00, parkingPass: 0.00 },
+        'emp-103': { transitPass: 120.00, parkingPass: 200.00 }
+    },
+
+    async getCommuterBenefits() {
+        return this._localCommuterBenefits;
+    },
+
+    async updateCommuterBenefit(empId, transitAmt, parkingAmt) {
+        this._localCommuterBenefits[empId] = {
+            transitPass: Math.min(parseFloat(transitAmt) || 0, 315),
+            parkingPass: Math.min(parseFloat(parkingAmt) || 0, 315)
+        };
+        try {
+            await this.addAuditLog('Commuter Benefit Updated', `Employee ${empId} updated Section 132 pre-tax commuter election (Transit: $${this._localCommuterBenefits[empId].transitPass}/mo, Parking: $${this._localCommuterBenefits[empId].parkingPass}/mo)`, 'benefits');
+        } catch (_) {}
+        return this._localCommuterBenefits[empId];
+    },
+
+    async recordQRTimePunch(empId, action, qrToken) {
+        const punch = {
+            id: `qr-${Date.now()}`,
+            empId,
+            action,
+            ts: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+            method: 'QR_Code_Kiosk',
+            token: qrToken || 'SEC-QR-LIVE'
+        };
+        if (!this._localTimePunches) this._localTimePunches = [];
+        this._localTimePunches.unshift(punch);
+        return punch;
+    },
+
+    // ─────────────────────────────────────────
     // FULL STATE LOADER
     // ─────────────────────────────────────────
 
@@ -2639,6 +2676,7 @@ const AeroDB = {
             offboardingRecords,
             taxVault1099,
             stateNexus,
+            commuterBenefits,
         ] = await Promise.all([
             soft(() => this.getEmployees(), []),
             soft(() => this.getPayrollHistory(), []),
@@ -2678,6 +2716,7 @@ const AeroDB = {
             soft(() => this.getOffboardingRecords(), []),
             soft(() => this.get1099VaultRecords(), []),
             soft(() => this.getStateNexusList(), []),
+            soft(() => this.getCommuterBenefits(), {}),
         ]);
 
         const userIdToLabel = {};
@@ -2753,6 +2792,7 @@ const AeroDB = {
             offboardingRecords: offboardingRecords || [],
             taxVault1099:    taxVault1099 || [],
             stateNexus:      stateNexus || [],
+            commuterBenefits: commuterBenefits || {},
             burnRateBudget:  { monthly: 45000 },
             splitDeposits:   {},
         };

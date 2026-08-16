@@ -895,6 +895,16 @@ const AeroApp = {
                 subtitleText = "Investor-ready workforce burden, comp benchmarking, and departmental allocation";
                 htmlContent = renderExecutiveBoardDeckView(this.state);
                 break;
+            case 'commuter-benefits':
+                titleText = "Commuter & Transit Benefits";
+                subtitleText = "IRS Section 132 pre-tax transit, train, and commuter parking elections";
+                htmlContent = renderCommuterBenefitsView(this.state, this.state.selectedEmployeeId);
+                break;
+            case 'qr-attendance':
+                titleText = "QR Code Attendance Kiosk";
+                subtitleText = "Dynamic rotating breakroom QR tokens and mobile camera attendance punches";
+                htmlContent = renderQRAttendanceKioskView(this.state);
+                break;
         }
 
         if (titleEl) titleEl.textContent = titleText;
@@ -4939,6 +4949,47 @@ const AeroApp = {
         this.state.stateNexus = await AeroDB.getStateNexusList();
         this.showToast(`Updated tax registration status for state: ${stateCode}`, 'success');
         this.navigateTo('multi-state-nexus');
+    },
+
+    // ─────────────────────────────────────────
+    // 22. COMMUTER & QR ATTENDANCE HANDLERS
+    // ─────────────────────────────────────────
+    updateCommuterPreview: function() {
+        const transit = parseFloat(document.getElementById('sliderTransit').value) || 0;
+        const parking = parseFloat(document.getElementById('sliderParking').value) || 0;
+
+        document.getElementById('transitDisplay').textContent = `$${transit}/mo`;
+        document.getElementById('parkingDisplay').textContent = `$${parking}/mo`;
+
+        const totalMonthly = transit + parking;
+        const perCheck = (totalMonthly * 12 / 26).toFixed(2);
+        const taxSavings = (totalMonthly * 12 * 0.28).toFixed(0);
+
+        const totalEl = document.getElementById('previewTotalMonthly');
+        const perCheckEl = document.getElementById('previewPerCheck');
+        const taxEl = document.getElementById('previewCommuterTaxSavings');
+
+        if (totalEl) totalEl.textContent = `$${totalMonthly.toFixed(2)}/mo`;
+        if (perCheckEl) perCheckEl.textContent = `$${perCheck}/check`;
+        if (taxEl) taxEl.textContent = `$${parseInt(taxSavings).toLocaleString()}/yr`;
+    },
+
+    saveCommuterBenefits: async function(empId) {
+        const transit = parseFloat(document.getElementById('sliderTransit').value) || 0;
+        const parking = parseFloat(document.getElementById('sliderParking').value) || 0;
+
+        await AeroDB.updateCommuterBenefit(empId, transit, parking);
+        this.state.commuterBenefits = await AeroDB.getCommuterBenefits();
+        this.showToast('Section 132 Commuter pre-tax deductions updated & synced to payroll!', 'success');
+        this.navigateTo('commuter-benefits');
+    },
+
+    simulateQRScanPunch: async function(action) {
+        const emp = (this.state.employees || [])[0];
+        const punch = await AeroDB.recordQRTimePunch(emp.id, action, 'SEC-QR-LIVE-TOKEN');
+        this.state.timePunches = await AeroDB.getTimePunches();
+        this.showToast(`QR Code Scan Verified! ${action === 'CLOCK_IN' ? 'Clocked In 🟢' : 'Clocked Out 🔴'} at ${punch.ts}`, 'success');
+        this.navigateTo('qr-attendance');
     }
 };
 

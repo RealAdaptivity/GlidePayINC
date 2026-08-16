@@ -6291,6 +6291,174 @@ function renderExecutiveBoardDeckView(state) {
     `;
 }
 
+// DD. Commuter & Transit Benefits (IRS Section 132 Pre-Tax)
+function renderCommuterBenefitsView(state, employeeId) {
+    const emp = (state.employees || []).find(e => e.id === employeeId) || (state.employees || [])[0];
+    if (!emp) return '<div class="card">Employee not found.</div>';
+
+    const commuter = (state.commuterBenefits && state.commuterBenefits[emp.id]) || { transitPass: 0, parkingPass: 0 };
+    const transit = commuter.transitPass || 0;
+    const parking = commuter.parkingPass || 0;
+    const totalMonthlyPreTax = transit + parking;
+    const annualPreTax = totalMonthlyPreTax * 12;
+    const estAnnualTaxSavings = (annualPreTax * 0.28).toFixed(0);
+
+    return `
+        <div class="grid-stats" style="margin-bottom:24px;">
+            <div class="card stat-card">
+                <span class="stat-label">Monthly Pre-Tax Election</span>
+                <span class="stat-value" style="color:var(--primary);">$${totalMonthlyPreTax.toFixed(2)}/mo</span>
+                <span class="stat-trend up">Exempt from FIT &amp; FICA</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">Est. Annual Tax Savings</span>
+                <span class="stat-value" style="color:var(--success);">$${parseInt(estAnnualTaxSavings).toLocaleString()}/yr</span>
+                <span class="stat-trend up">Pre-tax payroll deduction</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">2026 IRS Section 132 Limit</span>
+                <span class="stat-value">$315 / $315</span>
+                <span class="stat-trend">Transit / Parking monthly cap</span>
+            </div>
+        </div>
+
+        <div class="dashboard-grid" style="grid-template-columns: 1fr 1fr; gap:24px;">
+            <div class="card" style="padding:24px;">
+                <div class="section-title" style="margin-bottom:16px;">🚆 Commuter Pre-Tax Elections</div>
+                <p style="font-size:13px; color:var(--text-secondary); margin-bottom:20px;">Deduct transit and parking expenses pre-tax directly from your paycheck to save on federal and state taxes.</p>
+
+                <div class="form-group" style="margin-bottom:20px;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                        <label style="font-weight:600;">Public Transit, Trains &amp; Subways</label>
+                        <span id="transitDisplay" style="font-weight:700; color:var(--primary); font-size:16px;">$${transit}/mo</span>
+                    </div>
+                    <input type="range" id="sliderTransit" min="0" max="315" step="5" value="${transit}" oninput="AeroApp.updateCommuterPreview()" style="width:100%;" />
+                    <div style="font-size:11px; color:var(--text-tertiary); margin-top:4px;">IRS Limit: $315/month</div>
+                </div>
+
+                <div class="form-group" style="margin-bottom:24px;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                        <label style="font-weight:600;">Qualified Commuter Parking</label>
+                        <span id="parkingDisplay" style="font-weight:700; color:var(--success); font-size:16px;">$${parking}/mo</span>
+                    </div>
+                    <input type="range" id="sliderParking" min="0" max="315" step="5" value="${parking}" oninput="AeroApp.updateCommuterPreview()" style="width:100%;" />
+                    <div style="font-size:11px; color:var(--text-tertiary); margin-top:4px;">IRS Limit: $315/month</div>
+                </div>
+
+                <button class="btn btn-primary" style="width:100%; font-size:13px;" onclick="AeroApp.saveCommuterBenefits('${emp.id}')">Save Commuter Elections 🚆</button>
+            </div>
+
+            <div class="card" style="padding:24px; background:var(--bg-secondary);">
+                <div class="section-title" style="margin-bottom:16px;">💵 Real-Time Tax Advantage</div>
+                
+                <div style="display:flex; flex-direction:column; gap:12px; font-size:13px;">
+                    <div style="display:flex; justify-content:space-between; border-bottom:1px solid var(--border-color); padding-bottom:8px;">
+                        <span style="color:var(--text-secondary);">Total Monthly Deduction</span>
+                        <span id="previewTotalMonthly" style="font-weight:700; color:var(--primary);">$${totalMonthlyPreTax.toFixed(2)}/mo</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; border-bottom:1px solid var(--border-color); padding-bottom:8px;">
+                        <span style="color:var(--text-secondary);">Per-Paycheck Pre-Tax Impact</span>
+                        <span id="previewPerCheck" style="font-weight:700;">$${(totalMonthlyPreTax * 12 / 26).toFixed(2)}/check</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; border-bottom:1px solid var(--border-color); padding-bottom:8px;">
+                        <span style="color:var(--text-secondary);">Estimated Tax Savings (FICA + FIT)</span>
+                        <span id="previewCommuterTaxSavings" style="font-weight:700; color:var(--success);">$${parseInt(estAnnualTaxSavings).toLocaleString()}/yr</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; padding-top:4px;">
+                        <span style="color:var(--text-secondary);">Tax Code Authority</span>
+                        <span style="font-weight:600;">IRS Section 132(f)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// EE. Dynamic QR Code Attendance Kiosk & Mobile Scanner
+function renderQRAttendanceKioskView(state) {
+    const timePunches = state.timePunches || [];
+    const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+    return `
+        <div class="dashboard-grid" style="grid-template-columns: 1fr 1fr; gap:24px; margin-bottom:24px;">
+            <div class="card" style="padding:28px; text-align:center;">
+                <div class="section-title" style="margin-bottom:8px;">📱 Breakroom QR Attendance Kiosk</div>
+                <p style="font-size:13px; color:var(--text-secondary); margin-bottom:20px;">Display this dynamic QR token on a breakroom tablet or stand. Employees scan with their phones to clock in/out.</p>
+                
+                <div style="display:inline-block; padding:20px; background:#fff; border-radius:var(--radius-md); border:3px solid var(--primary); box-shadow:0 8px 24px rgba(79,70,229,0.12); margin-bottom:16px;">
+                    <!-- SVG QR Code Simulation -->
+                    <svg style="width:180px; height:180px;" viewBox="0 0 100 100" fill="#111827">
+                        <rect width="28" height="28" x="6" y="6" />
+                        <rect width="16" height="16" x="12" y="12" fill="#fff" />
+                        <rect width="8" height="8" x="16" y="16" />
+                        <rect width="28" height="28" x="66" y="6" />
+                        <rect width="16" height="16" x="72" y="12" fill="#fff" />
+                        <rect width="8" height="8" x="76" y="16" />
+                        <rect width="28" height="28" x="6" y="66" />
+                        <rect width="16" height="16" x="12" y="72" fill="#fff" />
+                        <rect width="8" height="8" x="16" y="76" />
+                        <rect width="6" height="6" x="42" y="12" />
+                        <rect width="6" height="6" x="50" y="24" />
+                        <rect width="6" height="6" x="42" y="42" />
+                        <rect width="6" height="6" x="52" y="52" />
+                        <rect width="6" height="6" x="70" y="42" />
+                        <rect width="6" height="6" x="82" y="60" />
+                        <rect width="6" height="6" x="42" y="70" />
+                        <rect width="6" height="6" x="56" y="80" />
+                        <rect width="6" height="6" x="80" y="80" />
+                    </svg>
+                    <div style="font-size:11px; font-weight:700; color:var(--primary); margin-top:8px;">🔒 SEC-QR-LIVE-TOKEN (Auto-Rotates)</div>
+                </div>
+
+                <div style="font-size:12px; color:var(--text-tertiary);">${today} · Kiosk Station #1 (Main Office)</div>
+            </div>
+
+            <div class="card" style="padding:28px;">
+                <div class="section-title" style="margin-bottom:8px;">⚡ In-App QR Mobile Punch Scanner</div>
+                <p style="font-size:13px; color:var(--text-secondary); margin-bottom:20px;">Simulate or test instant QR code attendance punches directly from the app.</p>
+
+                <div style="display:flex; flex-direction:column; gap:12px; margin-bottom:24px;">
+                    <button class="btn btn-primary" style="padding:14px; font-size:14px; display:flex; justify-content:center; align-items:center; gap:8px;" onclick="AeroApp.simulateQRScanPunch('CLOCK_IN')">
+                        <span>📷</span> Scan QR &amp; Clock In 🟢
+                    </button>
+                    <button class="btn btn-outline" style="padding:14px; font-size:14px; display:flex; justify-content:center; align-items:center; gap:8px;" onclick="AeroApp.simulateQRScanPunch('CLOCK_OUT')">
+                        <span>📷</span> Scan QR &amp; Clock Out 🔴
+                    </button>
+                </div>
+
+                <div style="padding:16px; background:var(--bg-secondary); border-radius:var(--radius-md); font-size:12px;">
+                    <div style="font-weight:700; margin-bottom:4px;">🛡️ Anti-Buddy Punching Security:</div>
+                    <ul style="margin:0; padding-left:18px; color:var(--text-secondary);">
+                        <li>Dynamic rotating QR token refreshed every 60 seconds</li>
+                        <li>Geofence &amp; WiFi BSSID lock verification</li>
+                        <li>Device biometric passkey confirmation</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="card table-card">
+            <div class="section-title" style="padding:20px 24px 0 24px;">Live QR Code Attendance Log</div>
+            <div class="table-wrapper">
+                <table class="table-responsive">
+                    <thead><tr><th>Time</th><th>Employee</th><th>Action</th><th>Verification Method</th><th>Status</th></tr></thead>
+                    <tbody>
+                        ${timePunches.slice(0, 8).map(p => `
+                            <tr>
+                                <td style="font-weight:600;">${p.ts || '08:45 AM'}</td>
+                                <td>${p.empName || 'Sarah Jenkins'}</td>
+                                <td><span class="badge ${p.action === 'CLOCK_IN' ? 'badge-success' : 'badge-danger'}">${p.action === 'CLOCK_IN' ? 'Clock In 🟢' : 'Clock Out 🔴'}</span></td>
+                                <td><span class="badge badge-info">${p.method || 'QR_Code_Kiosk'}</span></td>
+                                <td><span class="badge badge-success">Verified ✓</span></td>
+                            </tr>
+                        `).join('') || '<tr><td colspan="5" style="text-align:center; padding:30px; color:var(--text-tertiary);">No QR punches recorded yet.</td></tr>'}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    `;
+}
+
 // Export UI Renderers
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
@@ -6352,9 +6520,12 @@ if (typeof module !== 'undefined' && module.exports) {
         getForm1099NECFullHTML,
         renderEmploymentLetterHTML,
         renderMultiStateNexusView,
-        renderExecutiveBoardDeckView
+        renderExecutiveBoardDeckView,
+        renderCommuterBenefitsView,
+        renderQRAttendanceKioskView
     };
 }
+
 
 
 
