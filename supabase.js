@@ -2017,6 +2017,257 @@ const AeroDB = {
     },
 
     // ─────────────────────────────────────────
+    // 11. CORPORATE SPEND CARDS (RAMP / BREX STYLE)
+    // ─────────────────────────────────────────
+    _localSpendCards: [
+        {
+            id: 'card-1',
+            empId: 'emp-101',
+            empName: 'Sarah Jenkins',
+            last4: '4821',
+            expMonth: '08',
+            expYear: '29',
+            monthlyLimit: 1500,
+            spentThisMonth: 340.50,
+            status: 'active',
+            category: 'Engineering & Cloud',
+            type: 'virtual'
+        },
+        {
+            id: 'card-2',
+            empId: 'emp-102',
+            empName: 'Marcus Brody',
+            last4: '9912',
+            expMonth: '11',
+            expYear: '28',
+            monthlyLimit: 500,
+            spentThisMonth: 120.00,
+            status: 'active',
+            category: 'Software & Design',
+            type: 'virtual'
+        }
+    ],
+
+    async getSpendCards() {
+        return this._localSpendCards;
+    },
+
+    async issueSpendCard(data) {
+        const emp = (await this.getEmployees()).find(e => e.id === data.empId);
+        const card = {
+            id: 'card_' + Date.now(),
+            empId: data.empId,
+            empName: emp ? emp.name : 'Employee',
+            last4: String(Math.floor(1000 + Math.random() * 9000)),
+            expMonth: '09',
+            expYear: '30',
+            monthlyLimit: parseFloat(data.monthlyLimit) || 1000,
+            spentThisMonth: 0,
+            status: 'active',
+            category: data.category || 'General Spending',
+            type: data.type || 'virtual'
+        };
+        this._localSpendCards.unshift(card);
+        try {
+            await this.addAuditLog('Corporate Card Issued', `Issued virtual card (limit $${card.monthlyLimit}) to ${card.empName}`, 'banking');
+        } catch (_) {}
+        return card;
+    },
+
+    async toggleCardFreeze(cardId) {
+        const card = this._localSpendCards.find(c => c.id === cardId);
+        if (card) {
+            card.status = card.status === 'active' ? 'frozen' : 'active';
+            try {
+                await this.addAuditLog('Card Status Changed', `Card ending in ${card.last4} set to ${card.status}`, 'banking');
+            } catch (_) {}
+        }
+        return card;
+    },
+
+    // ─────────────────────────────────────────
+    // 12. EQUITY & CAP TABLE MANAGEMENT
+    // ─────────────────────────────────────────
+    _localStockGrants: [
+        {
+            id: 'grant-1',
+            empId: 'emp-101',
+            empName: 'Sarah Jenkins',
+            shares: 25000,
+            type: 'ISO',
+            grantDate: '2024-01-15',
+            strikePrice: 1.25,
+            currentValuation: 8.50,
+            vestedMonths: 31,
+            totalMonths: 48,
+            cliffMonths: 12
+        },
+        {
+            id: 'grant-2',
+            empId: 'emp-102',
+            empName: 'Marcus Brody',
+            shares: 10000,
+            type: 'NSO',
+            grantDate: '2024-06-01',
+            strikePrice: 2.00,
+            currentValuation: 8.50,
+            vestedMonths: 26,
+            totalMonths: 48,
+            cliffMonths: 12
+        }
+    ],
+
+    async getStockGrants() {
+        return this._localStockGrants;
+    },
+
+    async issueStockGrant(grant) {
+        const emp = (await this.getEmployees()).find(e => e.id === grant.empId);
+        const newGrant = {
+            id: 'grant_' + Date.now(),
+            empId: grant.empId,
+            empName: emp ? emp.name : 'Employee',
+            shares: parseInt(grant.shares) || 5000,
+            type: grant.type || 'ISO',
+            grantDate: grant.grantDate || new Date().toISOString().slice(0, 10),
+            strikePrice: parseFloat(grant.strikePrice) || 2.50,
+            currentValuation: 8.50,
+            vestedMonths: 0,
+            totalMonths: 48,
+            cliffMonths: 12
+        };
+        this._localStockGrants.unshift(newGrant);
+        try {
+            await this.addAuditLog('Stock Option Granted', `Issued ${newGrant.shares} ${newGrant.type} options to ${newGrant.empName}`, 'compliance');
+        } catch (_) {}
+        return newGrant;
+    },
+
+    // ─────────────────────────────────────────
+    // 13. IT HARDWARE & ASSET TRACKING
+    // ─────────────────────────────────────────
+    _localITAssets: [
+        {
+            id: 'asset-1',
+            empId: 'emp-101',
+            empName: 'Sarah Jenkins',
+            model: 'Apple MacBook Pro 16" (M3 Max, 64GB)',
+            serial: 'C02G901XP982',
+            tag: 'GLIDE-LAP-042',
+            assignedDate: '2024-01-15',
+            status: 'assigned',
+            condition: 'Excellent'
+        },
+        {
+            id: 'asset-2',
+            empId: 'emp-103',
+            empName: 'Elena Rostova',
+            model: 'Dell UltraSharp 32" 4K Monitor (U3223QE)',
+            serial: 'CN-0P8291-7281',
+            tag: 'GLIDE-MON-019',
+            assignedDate: '2024-08-01',
+            status: 'assigned',
+            condition: 'Excellent'
+        },
+        {
+            id: 'asset-3',
+            empId: null,
+            empName: 'Unassigned (In Inventory)',
+            model: 'Apple MacBook Air 15" (M3, 16GB)',
+            serial: 'C02H118MQ741',
+            tag: 'GLIDE-LAP-088',
+            assignedDate: null,
+            status: 'inventory',
+            condition: 'New in Box'
+        }
+    ],
+
+    async getITAssets() {
+        return this._localITAssets;
+    },
+
+    async assignITAsset(data) {
+        const emp = (await this.getEmployees()).find(e => e.id === data.empId);
+        const newAsset = {
+            id: 'asset_' + Date.now(),
+            empId: data.empId,
+            empName: emp ? emp.name : 'Employee',
+            model: data.model,
+            serial: data.serial,
+            tag: data.tag || `GLIDE-${Math.floor(100 + Math.random() * 900)}`,
+            assignedDate: new Date().toISOString().slice(0, 10),
+            status: 'assigned',
+            condition: data.condition || 'Good'
+        };
+        this._localITAssets.unshift(newAsset);
+        try {
+            await this.addAuditLog('IT Asset Assigned', `Assigned ${newAsset.model} (${newAsset.tag}) to ${newAsset.empName}`, 'operations');
+        } catch (_) {}
+        return newAsset;
+    },
+
+    async returnITAsset(assetId) {
+        const asset = this._localITAssets.find(a => a.id === assetId);
+        if (asset) {
+            asset.status = 'inventory';
+            asset.empId = null;
+            asset.empName = 'Unassigned (In Inventory)';
+            try {
+                await this.addAuditLog('IT Asset Returned', `Asset ${asset.tag} returned to inventory`, 'operations');
+            } catch (_) {}
+        }
+        return asset;
+    },
+
+    // ─────────────────────────────────────────
+    // 14. STATE RETIREMENT AUTO-COMPLIANCE
+    // ─────────────────────────────────────────
+    _localRetirementEnrollments: {
+        'emp-101': { state: 'CA', mandate: 'CalSavers', status: 'enrolled', ratePercent: 5.0, autoEscalate: true },
+        'emp-103': { state: 'TX', mandate: 'None (State Exempt)', status: 'exempt', ratePercent: 0, autoEscalate: false }
+    },
+
+    async getStateRetirementStatus() {
+        return this._localRetirementEnrollments;
+    },
+
+    async saveRetirementEnrollment(empId, data) {
+        this._localRetirementEnrollments[empId] = {
+            ...this._localRetirementEnrollments[empId],
+            ...data
+        };
+        try {
+            await this.addAuditLog('Retirement Enrollment Updated', `Updated state retirement mandate for employee ${empId}`, 'compliance');
+        } catch (_) {}
+        return this._localRetirementEnrollments[empId];
+    },
+
+    // ─────────────────────────────────────────
+    // 15. MULTI-PAY GROUPS & SCHEDULES
+    // ─────────────────────────────────────────
+    _localPayGroups: [
+        { id: 'group-1', name: 'Executive & Salaried Staff', frequency: 'Monthly', nextPayDate: '2026-09-01', memberCount: 2 },
+        { id: 'group-2', name: 'Corporate Office Team', frequency: 'Bi-Weekly', nextPayDate: '2026-08-28', memberCount: 2 },
+        { id: 'group-3', name: 'Hourly & Field Operations', frequency: 'Weekly', nextPayDate: '2026-08-21', memberCount: 1 }
+    ],
+
+    async getPayGroups() {
+        return this._localPayGroups;
+    },
+
+    async savePayGroup(group) {
+        const newGroup = {
+            id: 'grp_' + Date.now(),
+            name: group.name,
+            frequency: group.frequency || 'Bi-Weekly',
+            nextPayDate: group.nextPayDate || new Date().toISOString().slice(0, 10),
+            memberCount: 0
+        };
+        this._localPayGroups.push(newGroup);
+        return newGroup;
+    },
+
+    // ─────────────────────────────────────────
     // FULL STATE LOADER
     // ─────────────────────────────────────────
 
@@ -2072,6 +2323,11 @@ const AeroDB = {
             companyDocs,
             goals,
             reviews,
+            spendCards,
+            stockGrants,
+            itAssets,
+            retirementEnrollments,
+            payGroups,
         ] = await Promise.all([
             soft(() => this.getEmployees(), []),
             soft(() => this.getPayrollHistory(), []),
@@ -2099,6 +2355,11 @@ const AeroDB = {
             soft(() => this.getCompanyDocuments(), []),
             soft(() => this.getGoals(), []),
             soft(() => this.getPerformanceReviews(), []),
+            soft(() => this.getSpendCards(), []),
+            soft(() => this.getStockGrants(), []),
+            soft(() => this.getITAssets(), []),
+            soft(() => this.getStateRetirementStatus(), {}),
+            soft(() => this.getPayGroups(), []),
         ]);
 
         const userIdToLabel = {};
@@ -2162,6 +2423,11 @@ const AeroDB = {
             companyDocs:     companyDocs || [],
             goals:           goals || [],
             reviews:         reviews || [],
+            spendCards:      spendCards || [],
+            stockGrants:     stockGrants || [],
+            itAssets:        itAssets || [],
+            retirementEnrollments: retirementEnrollments || {},
+            payGroups:       payGroups || [],
             burnRateBudget:  { monthly: 45000 },
             splitDeposits:   {},
         };

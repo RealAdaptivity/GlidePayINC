@@ -5357,6 +5357,354 @@ function renderPerformanceReviewsView(state) {
     `;
 }
 
+// P. Corporate Virtual & Physical Spend Cards
+function renderSpendCardsView(state) {
+    const cards = state.spendCards || [];
+    let cardGrid = '';
+    cards.forEach(c => {
+        const isFrozen = c.status === 'frozen';
+        const percent = Math.min(100, Math.round((c.spentThisMonth / c.monthlyLimit) * 100));
+        cardGrid += `
+            <div class="card" style="padding:24px; position:relative; overflow:hidden; border-top:4px solid var(--${isFrozen ? 'warning' : 'primary'});">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px;">
+                    <div>
+                        <span class="badge badge-${isFrozen ? 'warning' : 'success'}" style="margin-bottom:6px;">${isFrozen ? 'Frozen ❄️' : 'Active 🟢'}</span>
+                        <div style="font-size:12px; color:var(--text-tertiary);">${escapeHTML(c.category)}</div>
+                    </div>
+                    <div style="font-weight:800; font-size:16px; color:var(--primary);">💳 VISA</div>
+                </div>
+
+                <div style="font-size:20px; font-weight:700; letter-spacing:4px; margin-bottom:16px; font-family:monospace;">
+                    •••• •••• •••• ${escapeHTML(c.last4)}
+                </div>
+
+                <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:16px;">
+                    <div>
+                        <div style="font-size:10px; color:var(--text-tertiary); text-transform:uppercase;">Cardholder</div>
+                        <div style="font-weight:600; font-size:13px;">${escapeHTML(c.empName)}</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="font-size:10px; color:var(--text-tertiary); text-transform:uppercase;">Expires</div>
+                        <div style="font-weight:600; font-size:13px;">${escapeHTML(c.expMonth)}/${escapeHTML(c.expYear)}</div>
+                    </div>
+                </div>
+
+                <div style="padding-top:12px; border-top:1px solid var(--border-color);">
+                    <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:6px;">
+                        <span>Spent: <strong>$${c.spentThisMonth.toFixed(2)}</strong></span>
+                        <span>Limit: <strong>$${c.monthlyLimit.toLocaleString()}</strong></span>
+                    </div>
+                    <div style="height:6px; background:var(--border-color); border-radius:3px; overflow:hidden; margin-bottom:12px;">
+                        <div style="height:100%; width:${percent}%; background:var(--${percent > 85 ? 'danger' : 'primary'});"></div>
+                    </div>
+                    <div style="display:flex; gap:8px;">
+                        <button class="btn btn-outline" style="flex:1; padding:4px 0; font-size:11px;" onclick="AeroApp.toggleSpendCardFreeze('${c.id}')">${isFrozen ? 'Unfreeze' : 'Freeze Card'}</button>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+
+    return `
+        <div class="grid-stats" style="margin-bottom:24px;">
+            <div class="card stat-card">
+                <span class="stat-label">Active Virtual Cards</span>
+                <span class="stat-value">${cards.length} Cards</span>
+                <span class="stat-trend up">Zero liability</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">Total Monthly Limit</span>
+                <span class="stat-value">${formatCurrency(cards.reduce((s, c) => s + c.monthlyLimit, 0))}</span>
+                <span class="stat-trend">Spend controls</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">Month-to-Date Spend</span>
+                <span class="stat-value" style="color:var(--primary);">${formatCurrency(cards.reduce((s, c) => s + c.spentThisMonth, 0))}</span>
+                <span class="stat-trend up">Automated receipts</span>
+            </div>
+        </div>
+
+        <div class="card" style="padding:24px; margin-bottom:24px; background:linear-gradient(135deg, rgba(79,70,229,0.06), rgba(16,185,129,0.06)); border:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+            <div>
+                <div class="section-title" style="margin-bottom:4px;">Corporate Spend Cards &amp; Expense Controls</div>
+                <p style="font-size:13px; color:var(--text-secondary); margin:0;">Issue instant corporate cards with automated spend limits and merchant category controls.</p>
+            </div>
+            <button class="btn btn-primary" onclick="AeroApp.openIssueSpendCardModal()">+ Issue Virtual Card</button>
+        </div>
+
+        <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap:20px;">
+            ${cardGrid}
+        </div>
+    `;
+}
+
+// Q. Equity & Cap Table Management (Carta Style)
+function renderCapTableView(state) {
+    const grants = state.stockGrants || [];
+    let rows = '';
+    let totalGrantedShares = 0;
+    grants.forEach(g => {
+        totalGrantedShares += g.shares;
+        const vestedPct = Math.min(100, Math.round((g.vestedMonths / g.totalMonths) * 100));
+        const vestedShares = Math.round((g.shares * vestedPct) / 100);
+        const estValue = (vestedShares * (g.currentValuation - g.strikePrice)).toFixed(2);
+        rows += `
+            <tr>
+                <td style="font-weight:600;">${escapeHTML(g.empName)}</td>
+                <td><span class="badge badge-info">${escapeHTML(g.type)}</span></td>
+                <td>${g.shares.toLocaleString()} shares</td>
+                <td>$${g.strikePrice.toFixed(2)}</td>
+                <td>$${g.currentValuation.toFixed(2)} / sh</td>
+                <td>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="font-weight:700; width:35px;">${vestedPct}%</span>
+                        <div style="flex:1; height:6px; background:var(--border-color); border-radius:3px; overflow:hidden; min-width:60px;">
+                            <div style="height:100%; width:${vestedPct}%; background:var(--success);"></div>
+                        </div>
+                    </div>
+                </td>
+                <td style="font-weight:700; color:var(--success);">$${parseFloat(estValue).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+            </tr>
+        `;
+    });
+
+    return `
+        <div class="grid-stats" style="margin-bottom:24px;">
+            <div class="card stat-card">
+                <span class="stat-label">Total Option Pool</span>
+                <span class="stat-value">1,000,000</span>
+                <span class="stat-trend up">100% Authorized</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">Issued Shares</span>
+                <span class="stat-value">${totalGrantedShares.toLocaleString()}</span>
+                <span class="stat-trend up">Team Grants</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">Latest 409A Valuation</span>
+                <span class="stat-value" style="color:var(--primary);">$8.50 / share</span>
+                <span class="stat-trend up">Fair Market Value</span>
+            </div>
+        </div>
+
+        <div class="card table-card">
+            <div class="section-title" style="padding:20px 24px 0 24px; display:flex; justify-content:space-between; align-items:center;">
+                <span>Company Cap Table &amp; Stock Option Grants</span>
+                <button class="btn btn-primary" style="font-size:12px;" onclick="AeroApp.openIssueStockGrantModal()">+ Grant Stock Options</button>
+            </div>
+            <div class="table-wrapper">
+                <table class="table-responsive">
+                    <thead><tr><th>Stakeholder</th><th>Option Type</th><th>Total Shares</th><th>Strike Price</th><th>409A FMV</th><th>Vesting Progress</th><th>Estimated Value</th></tr></thead>
+                    <tbody>${rows || '<tr><td colspan="7" style="text-align:center; padding:40px; color:var(--text-tertiary);">No equity grants issued.</td></tr>'}</tbody>
+                </table>
+            </div>
+        </div>
+    `;
+}
+
+// R. IT Hardware & Asset Tracking
+function renderITAssetsView(state) {
+    const assets = state.itAssets || [];
+    let rows = '';
+    assets.forEach(a => {
+        rows += `
+            <tr>
+                <td style="font-weight:600;">💻 ${escapeHTML(a.model)}</td>
+                <td><code>${escapeHTML(a.tag)}</code></td>
+                <td><span style="font-family:monospace; font-size:12px;">${escapeHTML(a.serial)}</span></td>
+                <td>${escapeHTML(a.empName || 'In Inventory')}</td>
+                <td><span class="badge ${a.status === 'assigned' ? 'badge-success' : 'badge-warning'}">${a.status === 'assigned' ? 'Deployed' : 'In Inventory'}</span></td>
+                <td style="text-align:right;">
+                    ${a.status === 'assigned' ? `
+                        <button class="btn btn-outline" style="padding:3px 8px; font-size:11px;" onclick="AeroApp.returnHardwareAsset('${a.id}')">Return to Inventory</button>
+                    ` : '<span style="font-size:12px; color:var(--text-tertiary);">Available</span>'}
+                </td>
+            </tr>
+        `;
+    });
+
+    return `
+        <div class="grid-stats" style="margin-bottom:24px;">
+            <div class="card stat-card">
+                <span class="stat-label">Total Hardware Assets</span>
+                <span class="stat-value">${assets.length} Devices</span>
+                <span class="stat-trend up">IT Catalog</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">Deployed to Workers</span>
+                <span class="stat-value">${assets.filter(a => a.status === 'assigned').length}</span>
+                <span class="stat-trend up">Active in field</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">Available in Inventory</span>
+                <span class="stat-value">${assets.filter(a => a.status === 'inventory').length}</span>
+                <span class="stat-trend">Ready to ship</span>
+            </div>
+        </div>
+
+        <div class="card table-card">
+            <div class="section-title" style="padding:20px 24px 0 24px; display:flex; justify-content:space-between; align-items:center;">
+                <span>IT Hardware &amp; Device Inventory</span>
+                <button class="btn btn-primary" style="font-size:12px;" onclick="AeroApp.openAssignAssetModal()">+ Provision New Asset</button>
+            </div>
+            <div class="table-wrapper">
+                <table class="table-responsive">
+                    <thead><tr><th>Hardware Model</th><th>Asset Tag</th><th>Serial Number</th><th>Assigned To</th><th>Status</th><th style="text-align:right;">Actions</th></tr></thead>
+                    <tbody>${rows || '<tr><td colspan="6" style="text-align:center; padding:40px; color:var(--text-tertiary);">No IT assets cataloged.</td></tr>'}</tbody>
+                </table>
+            </div>
+        </div>
+    `;
+}
+
+// S. State-Mandated Retirement Auto-Compliance (CalSavers & NY Secure Choice)
+function renderStateRetirementView(state) {
+    const enrollments = state.retirementEnrollments || {};
+    const employees = state.employees || [];
+
+    let rows = '';
+    employees.forEach(e => {
+        const enr = enrollments[e.id] || { mandate: e.state === 'CA' ? 'CalSavers' : (e.state === 'NY' ? 'NY Secure Choice' : 'None (State Exempt)'), status: e.state === 'CA' || e.state === 'NY' ? 'enrolled' : 'exempt', ratePercent: e.state === 'CA' || e.state === 'NY' ? 5.0 : 0 };
+        rows += `
+            <tr>
+                <td style="font-weight:600;">${escapeHTML(e.name)}</td>
+                <td><span class="badge badge-info">State: ${escapeHTML(e.state || 'CA')}</span></td>
+                <td><strong>${escapeHTML(enr.mandate)}</strong></td>
+                <td>${enr.ratePercent}% of gross pay</td>
+                <td><span class="badge ${enr.status === 'enrolled' ? 'badge-success' : 'badge-secondary'}">${enr.status === 'enrolled' ? 'Compliant &amp; Deducted ✓' : 'Exempt / Opted Out'}</span></td>
+                <td style="text-align:right;">
+                    <button class="btn btn-outline" style="padding:3px 8px; font-size:11px;" onclick="AeroApp.toggleRetirementStatus('${e.id}')">Toggle Opt-Out</button>
+                </td>
+            </tr>
+        `;
+    });
+
+    return `
+        <div class="grid-stats" style="margin-bottom:24px;">
+            <div class="card stat-card">
+                <span class="stat-label">State Mandate Compliance</span>
+                <span class="stat-value" style="color:var(--success);">100% Shielded</span>
+                <span class="stat-trend up">Zero State Fines</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">Enrolled Workers</span>
+                <span class="stat-value">${employees.filter(e => e.state === 'CA' || e.state === 'NY').length}</span>
+                <span class="stat-trend up">Auto-Deducted</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">Default Contribution</span>
+                <span class="stat-value">5.0%</span>
+                <span class="stat-trend up">Auto-Escalating</span>
+            </div>
+        </div>
+
+        <div class="card table-card">
+            <div class="section-title" style="padding:20px 24px 0 24px;">State-Mandated Retirement Compliance Ledger (CalSavers / NY Secure Choice)</div>
+            <div class="table-wrapper">
+                <table class="table-responsive">
+                    <thead><tr><th>Employee</th><th>Jurisdiction</th><th>State Mandate Program</th><th>Deduction Rate</th><th>Status</th><th style="text-align:right;">Actions</th></tr></thead>
+                    <tbody>${rows || '<tr><td colspan="6" style="text-align:center; padding:40px; color:var(--text-tertiary);">No employees registered.</td></tr>'}</tbody>
+                </table>
+            </div>
+        </div>
+    `;
+}
+
+// T. Payroll Cash Flow & Runway Simulator
+function renderRunwaySimulatorView(state) {
+    const cashInBank = 450000;
+    const monthlyRevenue = 35000;
+    const currentMonthlyPayroll = 24500;
+    const netBurn = currentMonthlyPayroll - monthlyRevenue;
+    const runwayMonths = netBurn > 0 ? (cashInBank / netBurn).toFixed(1) : 'Profitable (Infinite)';
+
+    return `
+        <div class="grid-stats" style="margin-bottom:24px;">
+            <div class="card stat-card">
+                <span class="stat-label">Cash in Bank</span>
+                <span class="stat-value">${formatCurrency(cashInBank)}</span>
+                <span class="stat-trend up">Audited balance</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">Monthly Gross Payroll</span>
+                <span class="stat-value">${formatCurrency(currentMonthlyPayroll)}</span>
+                <span class="stat-trend">Current team burn</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">Projected Runway</span>
+                <span class="stat-value" style="color:var(--success);">${runwayMonths} Months</span>
+                <span class="stat-trend up">Safe runway</span>
+            </div>
+        </div>
+
+        <div class="card" style="padding:32px; margin-bottom:24px;">
+            <div class="section-title" style="margin-bottom:16px;">🔮 Interactive Headcount &amp; Burn Rate Simulator</div>
+            <p style="font-size:14px; color:var(--text-secondary); margin-bottom:24px;">Simulate future engineering and sales hires to see their immediate impact on monthly cash burn and runway timeline.</p>
+            
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Current Monthly Revenue ($)</label>
+                    <input type="number" id="simRevInput" class="form-control" value="${monthlyRevenue}" oninput="AeroApp.updateRunwayCalc()" />
+                </div>
+                <div class="form-group">
+                    <label>Add Planned Engineers ($125k/yr)</label>
+                    <input type="number" id="simEngCount" class="form-control" value="2" min="0" max="20" oninput="AeroApp.updateRunwayCalc()" />
+                </div>
+                <div class="form-group">
+                    <label>Add Planned Sales Execs ($90k/yr)</label>
+                    <input type="number" id="simSalesCount" class="form-control" value="1" min="0" max="20" oninput="AeroApp.updateRunwayCalc()" />
+                </div>
+            </div>
+
+            <div id="simResultsBox" style="margin-top:24px; padding:20px; background:var(--bg-secondary); border-radius:var(--radius-md); border-left:4px solid var(--primary);">
+                <div style="font-weight:700; font-size:16px; margin-bottom:6px;">Projected Post-Hiring Burn Rate</div>
+                <div style="font-size:14px; color:var(--text-secondary);" id="simOutputText">
+                    Adding 2 Engineers and 1 Sales Exec will increase monthly payroll to <strong>$49,500/mo</strong>, resulting in a net burn of <strong>$14,500/mo</strong> and <strong>31.0 months</strong> of runway.
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// U. Multi-Pay Groups & Split Schedules
+function renderPayGroupsView(state) {
+    const groups = state.payGroups || [];
+    let rows = '';
+    groups.forEach(g => {
+        rows += `
+            <tr>
+                <td style="font-weight:600;">🏢 ${escapeHTML(g.name)}</td>
+                <td><span class="badge badge-info">${escapeHTML(g.frequency)}</span></td>
+                <td>${escapeHTML(g.nextPayDate)}</td>
+                <td>${g.memberCount} workers assigned</td>
+                <td style="text-align:right;">
+                    <button class="btn btn-outline" style="padding:4px 10px; font-size:12px;" onclick="AeroApp.navigateTo('payroll')">Run Group Payroll</button>
+                </td>
+            </tr>
+        `;
+    });
+
+    return `
+        <div class="card" style="padding:24px; margin-bottom:24px; background:linear-gradient(135deg, rgba(79,70,229,0.06), rgba(14,165,233,0.06)); border:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+            <div>
+                <div class="section-title" style="margin-bottom:4px;">Multi-Pay Schedules &amp; Employee Groups</div>
+                <p style="font-size:13px; color:var(--text-secondary); margin:0;">Run separate payroll cycles for Monthly executives, Bi-weekly staff, and Weekly hourly crews.</p>
+            </div>
+            <button class="btn btn-primary" onclick="AeroApp.promptCreatePayGroup()">+ Add Pay Schedule</button>
+        </div>
+
+        <div class="card table-card">
+            <div class="section-title" style="padding:20px 24px 0 24px;">Active Pay Groups (${groups.length})</div>
+            <div class="table-wrapper">
+                <table class="table-responsive">
+                    <thead><tr><th>Pay Group Name</th><th>Frequency</th><th>Next Pay Date</th><th>Assigned Members</th><th style="text-align:right;">Action</th></tr></thead>
+                    <tbody>${rows || '<tr><td colspan="5" style="text-align:center; padding:40px; color:var(--text-tertiary);">No pay groups defined.</td></tr>'}</tbody>
+                </table>
+            </div>
+        </div>
+    `;
+}
+
 // Export UI Renderers
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
@@ -5403,8 +5751,15 @@ if (typeof module !== 'undefined' && module.exports) {
         renderOrgChartView,
         renderGlobalContractorsView,
         renderCompanyDocumentsView,
-        renderPerformanceReviewsView
+        renderPerformanceReviewsView,
+        renderSpendCardsView,
+        renderCapTableView,
+        renderITAssetsView,
+        renderStateRetirementView,
+        renderRunwaySimulatorView,
+        renderPayGroupsView
     };
 }
+
 
 

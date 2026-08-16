@@ -830,6 +830,36 @@ const AeroApp = {
                 subtitleText = "Quarterly review cycles, team goal tracking, and merit wage sync";
                 htmlContent = renderPerformanceReviewsView(this.state);
                 break;
+            case 'spend-cards':
+                titleText = "Corporate Spend Cards";
+                subtitleText = "Issue virtual cards with spend limits and merchant category locks";
+                htmlContent = renderSpendCardsView(this.state);
+                break;
+            case 'cap-table':
+                titleText = "Equity & Cap Table";
+                subtitleText = "Company stock option grants, vesting schedules, and 409A valuation";
+                htmlContent = renderCapTableView(this.state);
+                break;
+            case 'it-assets':
+                titleText = "IT Equipment & Assets";
+                subtitleText = "Hardware inventory, laptop assignments, and offboarding recovery";
+                htmlContent = renderITAssetsView(this.state);
+                break;
+            case 'state-retirement':
+                titleText = "State Retirement Compliance";
+                subtitleText = "CalSavers and NY Secure Choice auto-deductions and exemption tracking";
+                htmlContent = renderStateRetirementView(this.state);
+                break;
+            case 'runway-simulator':
+                titleText = "Runway & Cash Flow Simulator";
+                subtitleText = "Interactive hiring burn rate calculator and financial forecast model";
+                htmlContent = renderRunwaySimulatorView(this.state);
+                break;
+            case 'pay-groups':
+                titleText = "Multi-Pay Schedules";
+                subtitleText = "Manage separate Monthly, Bi-weekly, and Weekly payroll cycles";
+                htmlContent = renderPayGroupsView(this.state);
+                break;
         }
 
         if (titleEl) titleEl.textContent = titleText;
@@ -4305,6 +4335,228 @@ const AeroApp = {
         emp.rate = emp.type === 'salaried' ? (emp.rate + raiseAmount) : (emp.rate + (raiseAmount / 2080));
         this.showToast(`Merit wage increase of +$${raiseAmount.toLocaleString()}/yr applied to ${emp.name}'s payroll profile!`, 'success');
         this.navigateTo('performance-reviews');
+    },
+
+    // ─────────────────────────────────────────
+    // 10. SPEND CARDS HANDLERS
+    // ─────────────────────────────────────────
+    openIssueSpendCardModal: function() {
+        const employees = this.state.employees || [];
+        const modalHTML = `
+            <form onsubmit="AeroApp.submitIssueSpendCard(event)">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Cardholder</label>
+                        <select class="form-control" id="cardEmpId" required>
+                            ${employees.map(e => `<option value="${e.id}">${escapeHTML(e.name)}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Monthly Spending Limit ($)</label>
+                        <input type="number" step="50" class="form-control" id="cardLimit" value="1500" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Merchant Category</label>
+                        <select class="form-control" id="cardCategory">
+                            <option value="Engineering & Cloud Services">Engineering & Cloud Services</option>
+                            <option value="Software & SaaS Subscriptions">Software & SaaS Subscriptions</option>
+                            <option value="Travel & Client Entertainment">Travel & Client Entertainment</option>
+                            <option value="Office Equipment & Supplies">Office Equipment & Supplies</option>
+                            <option value="General Corporate Spend">General Corporate Spend</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Card Type</label>
+                        <select class="form-control" id="cardType">
+                            <option value="virtual">Virtual Instant Card</option>
+                            <option value="physical">Physical Plastic Card</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:24px;">
+                    <button type="button" class="btn btn-secondary" onclick="AeroApp.closeModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Issue Corporate Card 💳</button>
+                </div>
+            </form>
+        `;
+        this.openModal('Issue Corporate Spend Card', modalHTML, true);
+    },
+
+    submitIssueSpendCard: async function(e) {
+        e.preventDefault();
+        const data = {
+            empId: document.getElementById('cardEmpId').value,
+            monthlyLimit: parseFloat(document.getElementById('cardLimit').value) || 1000,
+            category: document.getElementById('cardCategory').value,
+            type: document.getElementById('cardType').value
+        };
+        await AeroDB.issueSpendCard(data);
+        this.state.spendCards = await AeroDB.getSpendCards();
+        this.showToast('Corporate card issued with automated spend controls!', 'success');
+        this.closeModal();
+        this.navigateTo('spend-cards');
+    },
+
+    toggleSpendCardFreeze: async function(cardId) {
+        await AeroDB.toggleCardFreeze(cardId);
+        this.state.spendCards = await AeroDB.getSpendCards();
+        this.showToast('Card status updated.', 'info');
+        this.navigateTo('spend-cards');
+    },
+
+    // ─────────────────────────────────────────
+    // 11. EQUITY & CAP TABLE HANDLERS
+    // ─────────────────────────────────────────
+    openIssueStockGrantModal: function() {
+        const employees = this.state.employees || [];
+        const modalHTML = `
+            <form onsubmit="AeroApp.submitIssueStockGrant(event)">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Stakeholder / Employee</label>
+                        <select class="form-control" id="grantEmpId" required>
+                            ${employees.map(e => `<option value="${e.id}">${escapeHTML(e.name)}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Option Type</label>
+                        <select class="form-control" id="grantType">
+                            <option value="ISO">ISO (Incentive Stock Options)</option>
+                            <option value="NSO">NSO (Non-Qualified Stock Options)</option>
+                            <option value="RSU">RSU (Restricted Stock Units)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Number of Shares</label>
+                        <input type="number" step="500" class="form-control" id="grantShares" value="10000" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Exercise Strike Price ($/sh)</label>
+                        <input type="number" step="0.05" class="form-control" id="grantStrike" value="1.50" required />
+                    </div>
+                </div>
+
+                <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:24px;">
+                    <button type="button" class="btn btn-secondary" onclick="AeroApp.closeModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Grant Equity Shares 📊</button>
+                </div>
+            </form>
+        `;
+        this.openModal('Grant Stock Options & Equity', modalHTML, true);
+    },
+
+    submitIssueStockGrant: async function(e) {
+        e.preventDefault();
+        const data = {
+            empId: document.getElementById('grantEmpId').value,
+            type: document.getElementById('grantType').value,
+            shares: parseInt(document.getElementById('grantShares').value) || 5000,
+            strikePrice: parseFloat(document.getElementById('grantStrike').value) || 1.50
+        };
+        await AeroDB.issueStockGrant(data);
+        this.state.stockGrants = await AeroDB.getStockGrants();
+        this.showToast('Equity grant recorded on company cap table!', 'success');
+        this.closeModal();
+        this.navigateTo('cap-table');
+    },
+
+    // ─────────────────────────────────────────
+    // 12. IT ASSET HANDLERS
+    // ─────────────────────────────────────────
+    openAssignAssetModal: function() {
+        const employees = this.state.employees || [];
+        const modalHTML = `
+            <form onsubmit="AeroApp.submitAssignAsset(event)">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Assign To Employee</label>
+                        <select class="form-control" id="assetEmpId" required>
+                            ${employees.map(e => `<option value="${e.id}">${escapeHTML(e.name)}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Hardware Model</label>
+                        <input type="text" class="form-control" id="assetModel" placeholder="e.g. Apple MacBook Pro 16\" (M3)" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Serial Number</label>
+                        <input type="text" class="form-control" id="assetSerial" placeholder="e.g. C02G901XP982" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Asset Tag Code</label>
+                        <input type="text" class="form-control" id="assetTag" placeholder="e.g. GLIDE-LAP-099" />
+                    </div>
+                </div>
+
+                <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:24px;">
+                    <button type="button" class="btn btn-secondary" onclick="AeroApp.closeModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Provision Device 💻</button>
+                </div>
+            </form>
+        `;
+        this.openModal('Provision IT Hardware Device', modalHTML, true);
+    },
+
+    submitAssignAsset: async function(e) {
+        e.preventDefault();
+        const data = {
+            empId: document.getElementById('assetEmpId').value,
+            model: document.getElementById('assetModel').value.trim(),
+            serial: document.getElementById('assetSerial').value.trim(),
+            tag: document.getElementById('assetTag').value.trim()
+        };
+        await AeroDB.assignITAsset(data);
+        this.state.itAssets = await AeroDB.getITAssets();
+        this.showToast('IT device assigned and cataloged!', 'success');
+        this.closeModal();
+        this.navigateTo('it-assets');
+    },
+
+    returnHardwareAsset: async function(assetId) {
+        await AeroDB.returnITAsset(assetId);
+        this.state.itAssets = await AeroDB.getITAssets();
+        this.showToast('Hardware asset returned to inventory.', 'info');
+        this.navigateTo('it-assets');
+    },
+
+    // ─────────────────────────────────────────
+    // 13. STATE RETIREMENT & RUNWAY
+    // ─────────────────────────────────────────
+    toggleRetirementStatus: async function(empId) {
+        const current = (this.state.retirementEnrollments || {})[empId];
+        const newStatus = current?.status === 'enrolled' ? 'exempt' : 'enrolled';
+        await AeroDB.saveRetirementEnrollment(empId, { status: newStatus });
+        this.state.retirementEnrollments = await AeroDB.getStateRetirementStatus();
+        this.showToast(`Retirement compliance status updated to ${newStatus}.`, 'info');
+        this.navigateTo('state-retirement');
+    },
+
+    updateRunwayCalc: function() {
+        const rev = parseFloat(document.getElementById('simRevInput')?.value) || 0;
+        const eng = parseInt(document.getElementById('simEngCount')?.value) || 0;
+        const sales = parseInt(document.getElementById('simSalesCount')?.value) || 0;
+        const basePayroll = 24500;
+        const addedMonthly = (eng * (125000 / 12)) + (sales * (90000 / 12));
+        const totalPayroll = Math.round(basePayroll + addedMonthly);
+        const netBurn = Math.max(0, totalPayroll - rev);
+        const cashInBank = 450000;
+        const runway = netBurn > 0 ? (cashInBank / netBurn).toFixed(1) : 'Profitable (Infinite)';
+
+        const textEl = document.getElementById('simOutputText');
+        if (textEl) {
+            textEl.innerHTML = `Adding ${eng} Engineers and ${sales} Sales Execs will increase monthly payroll to <strong>$${totalPayroll.toLocaleString()}/mo</strong>, resulting in a net burn of <strong>$${netBurn.toLocaleString()}/mo</strong> and <strong>${runway} months</strong> of runway.`;
+        }
+    },
+
+    promptCreatePayGroup: async function() {
+        const name = prompt('Enter the new pay group name (e.g. "Executive Monthly" or "Field Hourly Weekly"):');
+        if (!name || !name.trim()) return;
+        const freq = prompt('Enter payment frequency ("Weekly", "Bi-Weekly", or "Monthly"):', 'Bi-Weekly');
+        await AeroDB.savePayGroup({ name: name.trim(), frequency: freq || 'Bi-Weekly' });
+        this.state.payGroups = await AeroDB.getPayGroups();
+        this.showToast(`Pay group "${name.trim()}" created!`, 'success');
+        this.navigateTo('pay-groups');
     }
 };
 
