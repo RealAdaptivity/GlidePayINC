@@ -2700,9 +2700,10 @@ const AeroApp = {
     },
 
     populateW2Selectors: function() {
+        const emps = (this.state && this.state.employees) || [];
         const select = document.getElementById('w2EmployeeSelect');
         if (select) {
-            const options = this.state.employees
+            const options = emps
                 .filter(e => e.classification !== '1099')
                 .map(e => new Option(String(e.name || ''), String(e.id || '')));
             select.replaceChildren(...options);
@@ -2710,7 +2711,7 @@ const AeroApp = {
         
         const selectNec = document.getElementById('necContractorSelect');
         if (selectNec) {
-            const options = this.state.employees
+            const options = emps
                 .filter(e => e.classification === '1099')
                 .map(e => new Option(String(e.name || ''), String(e.id || '')));
             selectNec.replaceChildren(...options);
