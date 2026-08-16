@@ -2609,6 +2609,85 @@ const AeroDB = {
     },
 
     // ─────────────────────────────────────────
+    // 24. HSA & FSA HEALTHCARE CLAIMS
+    // ─────────────────────────────────────────
+    _localHSAClaims: [
+        { id: 'hsa-1', empId: 'emp-101', empName: 'Sarah Jenkins', type: 'HSA', provider: 'Walgreens Pharmacy', category: 'Prescription', amount: 64.50, date: '2026-08-02', status: 'approved' },
+        { id: 'hsa-2', empId: 'emp-103', empName: 'Elena Rostova', type: 'Healthcare FSA', provider: 'Downtown Dental Care', category: 'Dental Copay', amount: 180.00, date: '2026-08-10', status: 'pending' }
+    ],
+
+    async getHSAClaims() {
+        return this._localHSAClaims;
+    },
+
+    async submitHSAClaim(claimData) {
+        const newClaim = {
+            id: `hsa-${Date.now()}`,
+            empId: claimData.empId,
+            empName: claimData.empName || 'Sarah Jenkins',
+            type: claimData.type || 'HSA',
+            provider: claimData.provider,
+            category: claimData.category,
+            amount: parseFloat(claimData.amount) || 0,
+            date: claimData.date || new Date().toISOString().split('T')[0],
+            status: 'pending'
+        };
+        this._localHSAClaims.unshift(newClaim);
+        try {
+            await this.addAuditLog('HSA/FSA Claim Submitted', `${newClaim.empName} submitted $${newClaim.amount.toFixed(2)} claim for ${newClaim.provider}`, 'benefits');
+        } catch (_) {}
+        return newClaim;
+    },
+
+    async approveHSAClaim(claimId) {
+        const claim = this._localHSAClaims.find(c => c.id === claimId);
+        if (claim) {
+            claim.status = 'approved';
+            try {
+                await this.addAuditLog('HSA/FSA Claim Approved', `Approved $${claim.amount.toFixed(2)} reimbursement for ${claim.empName}`, 'benefits');
+            } catch (_) {}
+        }
+        return claim;
+    },
+
+    // ─────────────────────────────────────────
+    // 25. SECURE CERTIFICATION & LICENSE VAULT
+    // ─────────────────────────────────────────
+    _localCertVault: [
+        { id: 'cert-1', empId: 'emp-101', empName: 'Sarah Jenkins', name: 'Professional Engineer (PE) License', issuer: 'California BPELSG', expires: '2027-06-30', status: 'active' },
+        { id: 'cert-2', empId: 'emp-103', empName: 'Elena Rostova', name: 'OSHA 30-Hour General Industry', issuer: 'OSHA Training Institute', expires: '2026-09-01', status: 'expiring_soon' },
+        { id: 'cert-3', empId: 'emp-104', empName: 'David Kim', name: 'CPR & First Aid Certification', issuer: 'American Red Cross', expires: '2025-12-15', status: 'expired' }
+    ],
+
+    async getEmployeeCertifications() {
+        return this._localCertVault;
+    },
+
+    async addEmployeeCertification(data) {
+        const now = new Date();
+        const exp = new Date(data.expires);
+        const diffDays = Math.ceil((exp - now) / (1000 * 60 * 60 * 24));
+        let status = 'active';
+        if (diffDays < 0) status = 'expired';
+        else if (diffDays <= 30) status = 'expiring_soon';
+
+        const newCert = {
+            id: `cert-${Date.now()}`,
+            empId: data.empId,
+            empName: data.empName || 'Sarah Jenkins',
+            name: data.name,
+            issuer: data.issuer,
+            expires: data.expires,
+            status
+        };
+        this._localCertVault.unshift(newCert);
+        try {
+            await this.addAuditLog('Certification Uploaded', `Added ${newCert.name} for ${newCert.empName} (Expires: ${newCert.expires})`, 'compliance');
+        } catch (_) {}
+        return newCert;
+    },
+
+    // ─────────────────────────────────────────
     // FULL STATE LOADER
     // ─────────────────────────────────────────
 
@@ -2677,6 +2756,8 @@ const AeroDB = {
             taxVault1099,
             stateNexus,
             commuterBenefits,
+            hsaClaims,
+            certifications,
         ] = await Promise.all([
             soft(() => this.getEmployees(), []),
             soft(() => this.getPayrollHistory(), []),
@@ -2717,6 +2798,8 @@ const AeroDB = {
             soft(() => this.get1099VaultRecords(), []),
             soft(() => this.getStateNexusList(), []),
             soft(() => this.getCommuterBenefits(), {}),
+            soft(() => this.getHSAClaims(), []),
+            soft(() => this.getEmployeeCertifications(), []),
         ]);
 
         const userIdToLabel = {};
@@ -2793,6 +2876,8 @@ const AeroDB = {
             taxVault1099:    taxVault1099 || [],
             stateNexus:      stateNexus || [],
             commuterBenefits: commuterBenefits || {},
+            hsaClaims:       hsaClaims || [],
+            certifications:  certifications || [],
             burnRateBudget:  { monthly: 45000 },
             splitDeposits:   {},
         };

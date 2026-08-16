@@ -905,6 +905,16 @@ const AeroApp = {
                 subtitleText = "Dynamic rotating breakroom QR tokens and mobile camera attendance punches";
                 htmlContent = renderQRAttendanceKioskView(this.state);
                 break;
+            case 'hsa-fsa-claims':
+                titleText = "HSA & FSA Healthcare Claims";
+                subtitleText = "Pre-tax healthcare reimbursement claims and 2026 statutory limit tracking";
+                htmlContent = renderHSAFSAClaimsView(this.state);
+                break;
+            case 'certifications-vault':
+                titleText = "Certifications & Document Vault";
+                subtitleText = "Encrypted storage and expiration watchdog for professional licenses and credentials";
+                htmlContent = renderCertificationsVaultView(this.state);
+                break;
         }
 
         if (titleEl) titleEl.textContent = titleText;
@@ -4990,6 +5000,123 @@ const AeroApp = {
         this.state.timePunches = await AeroDB.getTimePunches();
         this.showToast(`QR Code Scan Verified! ${action === 'CLOCK_IN' ? 'Clocked In 🟢' : 'Clocked Out 🔴'} at ${punch.ts}`, 'success');
         this.navigateTo('qr-attendance');
+    },
+
+    // ─────────────────────────────────────────
+    // 23. HSA/FSA & CERTIFICATION HANDLERS
+    // ─────────────────────────────────────────
+    openSubmitHSAClaimModal: function() {
+        const modalHTML = `
+            <form onsubmit="AeroApp.submitHSAClaim(event)">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Account Type</label>
+                        <select class="form-control" id="hsaClaimType">
+                            <option value="HSA">Health Savings Account (HSA)</option>
+                            <option value="Healthcare FSA">Healthcare FSA</option>
+                            <option value="Dependent Care FSA">Dependent Care FSA</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Provider / Merchant</label>
+                        <input type="text" class="form-control" id="hsaProvider" placeholder="e.g. Walgreens, Quest Diagnostics" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Expense Category</label>
+                        <select class="form-control" id="hsaCategory">
+                            <option value="Prescription">Prescription Rx</option>
+                            <option value="Doctor Copay">Doctor Visit / Copay</option>
+                            <option value="Dental">Dental Care</option>
+                            <option value="Vision">Vision / Glasses</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Claim Amount ($)</label>
+                        <input type="number" step="0.01" class="form-control" id="hsaAmount" required />
+                    </div>
+                </div>
+                <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:20px;">
+                    <button type="button" class="btn btn-secondary" onclick="AeroApp.closeModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Submit for Reimbursement 🏥</button>
+                </div>
+            </form>
+        `;
+        this.openModal('Submit HSA / FSA Healthcare Claim', modalHTML, true);
+    },
+
+    submitHSAClaim: async function(e) {
+        e.preventDefault();
+        const emp = (this.state.employees || [])[0];
+        const data = {
+            empId: emp.id,
+            empName: emp.name,
+            type: document.getElementById('hsaClaimType').value,
+            provider: document.getElementById('hsaProvider').value,
+            category: document.getElementById('hsaCategory').value,
+            amount: parseFloat(document.getElementById('hsaAmount').value)
+        };
+        await AeroDB.submitHSAClaim(data);
+        this.state.hsaClaims = await AeroDB.getHSAClaims();
+        this.showToast(`HSA Claim for $${data.amount.toFixed(2)} submitted for review!`, 'success');
+        this.closeModal();
+        this.navigateTo('hsa-fsa-claims');
+    },
+
+    approveHSAClaim: async function(claimId) {
+        await AeroDB.approveHSAClaim(claimId);
+        this.state.hsaClaims = await AeroDB.getHSAClaims();
+        this.showToast('Claim approved! Tax-free direct deposit reimbursement initiated.', 'success');
+        this.navigateTo('hsa-fsa-claims');
+    },
+
+    openAddCertificationModal: function() {
+        const modalHTML = `
+            <form onsubmit="AeroApp.submitCertification(event)">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Employee</label>
+                        <select class="form-control" id="certEmpSelect">
+                            ${(this.state.employees || []).map(e => `<option value="${e.id}">${escapeHTML(e.name)}</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Credential / License Name</label>
+                        <input type="text" class="form-control" id="certName" placeholder="e.g. Certified Public Accountant (CPA)" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Issuing Authority / State Board</label>
+                        <input type="text" class="form-control" id="certIssuer" placeholder="e.g. AICPA, State Medical Board" required />
+                    </div>
+                    <div class="form-group">
+                        <label>Expiration Date</label>
+                        <input type="date" class="form-control" id="certExpires" required />
+                    </div>
+                </div>
+                <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:20px;">
+                    <button type="button" class="btn btn-secondary" onclick="AeroApp.closeModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Credential 🔒</button>
+                </div>
+            </form>
+        `;
+        this.openModal('Add Professional License or Certification', modalHTML, true);
+    },
+
+    submitCertification: async function(e) {
+        e.preventDefault();
+        const empId = document.getElementById('certEmpSelect').value;
+        const emp = (this.state.employees || []).find(x => x.id === empId) || (this.state.employees || [])[0];
+        const data = {
+            empId,
+            empName: emp.name,
+            name: document.getElementById('certName').value,
+            issuer: document.getElementById('certIssuer').value,
+            expires: document.getElementById('certExpires').value
+        };
+        await AeroDB.addEmployeeCertification(data);
+        this.state.certifications = await AeroDB.getEmployeeCertifications();
+        this.showToast(`Added ${data.name} to secure credential vault!`, 'success');
+        this.closeModal();
+        this.navigateTo('certifications-vault');
     }
 };
 

@@ -6459,6 +6459,140 @@ function renderQRAttendanceKioskView(state) {
     `;
 }
 
+// FF. HSA & FSA Pre-Tax Healthcare Claims Hub
+function renderHSAFSAClaimsView(state) {
+    const claims = state.hsaClaims || [];
+    const totalApproved = claims.filter(c => c.status === 'approved').reduce((s, c) => s + c.amount, 0);
+    const pendingClaims = claims.filter(c => c.status === 'pending');
+
+    let rows = '';
+    claims.forEach(c => {
+        const isAppr = c.status === 'approved';
+        rows += `
+            <tr>
+                <td style="font-weight:600;">${escapeHTML(c.empName)}</td>
+                <td><span class="badge badge-info">${escapeHTML(c.type)}</span></td>
+                <td>${escapeHTML(c.provider)} (${escapeHTML(c.category)})</td>
+                <td style="font-weight:700; color:var(--primary);">${formatCurrency(c.amount)}</td>
+                <td>${escapeHTML(c.date)}</td>
+                <td><span class="badge ${isAppr ? 'badge-success' : 'badge-warning'}">${isAppr ? 'Approved &amp; Reimbursed ✓' : 'Pending Review'}</span></td>
+                <td style="text-align:right;">
+                    ${!isAppr ? `<button class="btn btn-primary" style="padding:3px 8px; font-size:11px;" onclick="AeroApp.approveHSAClaim('${c.id}')">Approve Reimbursement</button>` : '<span style="font-size:11px; color:var(--text-tertiary);">Paid Tax-Free</span>'}
+                </td>
+            </tr>
+        `;
+    });
+
+    return `
+        <div class="grid-stats" style="margin-bottom:24px;">
+            <div class="card stat-card">
+                <span class="stat-label">2026 Statutory HSA Limit</span>
+                <span class="stat-value">$4,300 / $8,550</span>
+                <span class="stat-trend up">Individual / Family</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">Tax-Free Reimbursements</span>
+                <span class="stat-value" style="color:var(--success);">${formatCurrency(totalApproved)}</span>
+                <span class="stat-trend up">Approved YTD</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">Pending Claim Approvals</span>
+                <span class="stat-value" style="color:var(--warning);">${pendingClaims.length} Claims</span>
+                <span class="stat-trend">Action required</span>
+            </div>
+        </div>
+
+        <div class="card" style="padding:24px; margin-bottom:24px; background:linear-gradient(135deg, rgba(16,185,129,0.06), rgba(79,70,229,0.06)); border:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+            <div>
+                <div class="section-title" style="margin-bottom:4px;">HSA &amp; FSA Healthcare Reimbursement Claims</div>
+                <p style="font-size:13px; color:var(--text-secondary); margin:0;">Submit out-of-pocket medical, dental, and vision receipts for pre-tax reimbursement.</p>
+            </div>
+            <button class="btn btn-primary" onclick="AeroApp.openSubmitHSAClaimModal()">+ Submit Medical Receipt</button>
+        </div>
+
+        <div class="card table-card">
+            <div class="section-title" style="padding:20px 24px 0 24px;">Reimbursement Claims History</div>
+            <div class="table-wrapper">
+                <table class="table-responsive">
+                    <thead><tr><th>Employee</th><th>Account Type</th><th>Provider &amp; Service</th><th>Claim Amount</th><th>Date</th><th>Status</th><th style="text-align:right;">Action</th></tr></thead>
+                    <tbody>${rows || '<tr><td colspan="7" style="text-align:center; padding:40px; color:var(--text-tertiary);">No medical claims submitted.</td></tr>'}</tbody>
+                </table>
+            </div>
+        </div>
+    `;
+}
+
+// GG. Secure Employee Document & Certification Vault
+function renderCertificationsVaultView(state) {
+    const certs = state.certifications || [];
+    const expiringCount = certs.filter(c => c.status === 'expiring_soon').length;
+    const expiredCount = certs.filter(c => c.status === 'expired').length;
+
+    let rows = '';
+    certs.forEach(c => {
+        let badgeClass = 'badge-success';
+        let badgeText = 'Active &amp; Valid ✓';
+        if (c.status === 'expiring_soon') {
+            badgeClass = 'badge-warning';
+            badgeText = 'Expiring in &lt; 30 Days ⚠️';
+        } else if (c.status === 'expired') {
+            badgeClass = 'badge-danger';
+            badgeText = 'Expired 🔴';
+        }
+
+        rows += `
+            <tr>
+                <td style="font-weight:600;">${escapeHTML(c.empName)}</td>
+                <td style="font-weight:700; color:var(--primary);">${escapeHTML(c.name)}</td>
+                <td>${escapeHTML(c.issuer)}</td>
+                <td><span style="font-family:monospace; font-size:12px;">${escapeHTML(c.expires)}</span></td>
+                <td><span class="badge ${badgeClass}">${badgeText}</span></td>
+                <td style="text-align:right;">
+                    <button class="btn btn-outline" style="padding:3px 8px; font-size:11px;" onclick="AeroApp.showToast('Encrypted document preview loaded for ${escapeHTML(c.name)}', 'success')">View Document 📄</button>
+                </td>
+            </tr>
+        `;
+    });
+
+    return `
+        <div class="grid-stats" style="margin-bottom:24px;">
+            <div class="card stat-card">
+                <span class="stat-label">Active Credentials</span>
+                <span class="stat-value">${certs.filter(c => c.status === 'active').length} Certified</span>
+                <span class="stat-trend up">100% compliant</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">Expiring within 30 Days</span>
+                <span class="stat-value" style="color:var(--warning);">${expiringCount} Credentials</span>
+                <span class="stat-trend">Renewal notice sent</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">Expired Licenses</span>
+                <span class="stat-value" style="color:var(--danger);">${expiredCount} Lapsed</span>
+                <span class="stat-trend">Immediate action</span>
+            </div>
+        </div>
+
+        <div class="card" style="padding:24px; margin-bottom:24px; background:linear-gradient(135deg, rgba(79,70,229,0.06), rgba(245,158,11,0.06)); border:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+            <div>
+                <div class="section-title" style="margin-bottom:4px;">Employee Professional License &amp; Certification Vault</div>
+                <p style="font-size:13px; color:var(--text-secondary); margin:0;">Secure encrypted storage with automated expiration monitoring for state licenses, OSHA, CPR, and safety certs.</p>
+            </div>
+            <button class="btn btn-primary" onclick="AeroApp.openAddCertificationModal()">+ Add New Credential</button>
+        </div>
+
+        <div class="card table-card">
+            <div class="section-title" style="padding:20px 24px 0 24px;">Credential Compliance Roster</div>
+            <div class="table-wrapper">
+                <table class="table-responsive">
+                    <thead><tr><th>Employee</th><th>License / Certification</th><th>Issuing Authority</th><th>Expiration Date</th><th>Status</th><th style="text-align:right;">Action</th></tr></thead>
+                    <tbody>${rows || '<tr><td colspan="6" style="text-align:center; padding:40px; color:var(--text-tertiary);">No certifications recorded.</td></tr>'}</tbody>
+                </table>
+            </div>
+        </div>
+    `;
+}
+
 // Export UI Renderers
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
@@ -6522,7 +6656,9 @@ if (typeof module !== 'undefined' && module.exports) {
         renderMultiStateNexusView,
         renderExecutiveBoardDeckView,
         renderCommuterBenefitsView,
-        renderQRAttendanceKioskView
+        renderQRAttendanceKioskView,
+        renderHSAFSAClaimsView,
+        renderCertificationsVaultView
     };
 }
 
