@@ -2545,6 +2545,33 @@ const AeroDB = {
     },
 
     // ─────────────────────────────────────────
+    // 22. MULTI-STATE TAX NEXUS & REGISTRATIONS
+    // ─────────────────────────────────────────
+    _localStateNexus: [
+        { state: 'CA', name: 'California', sitAgency: 'Franchise Tax Board (FTB)', sutaAgency: 'Employment Development Dept (EDD)', sutaRate: 3.4, status: 'registered', link: 'https://edd.ca.gov' },
+        { state: 'NY', name: 'New York', sitAgency: 'Dept of Taxation & Finance (DTF)', sutaAgency: 'Dept of Labor (DOL)', sutaRate: 4.1, status: 'registered', link: 'https://tax.ny.gov' },
+        { state: 'TX', name: 'Texas', sitAgency: 'None (0% State Tax)', sutaAgency: 'Texas Workforce Commission (TWC)', sutaRate: 2.7, status: 'registered', link: 'https://twc.texas.gov' },
+        { state: 'FL', name: 'Florida', sitAgency: 'None (0% State Tax)', sutaAgency: 'Florida Dept of Revenue (DOR)', sutaRate: 2.7, status: 'registered', link: 'https://floridarevenue.com' },
+        { state: 'WA', name: 'Washington', sitAgency: 'None (0% State Tax)', sutaAgency: 'Employment Security Dept (ESD)', sutaRate: 1.5, status: 'pending', link: 'https://esd.wa.gov' },
+        { state: 'IL', name: 'Illinois', sitAgency: 'Illinois Dept of Revenue', sutaAgency: 'Illinois Dept of Employment Security', sutaRate: 3.9, status: 'pending', link: 'https://tax.illinois.gov' }
+    ],
+
+    async getStateNexusList() {
+        return this._localStateNexus;
+    },
+
+    async updateStateNexusStatus(stateCode, status) {
+        const item = this._localStateNexus.find(s => s.state === stateCode);
+        if (item) {
+            item.status = status || (item.status === 'registered' ? 'pending' : 'registered');
+            try {
+                await this.addAuditLog('State Nexus Updated', `Updated registration status for ${item.name} (${item.state}) to ${item.status}`, 'compliance');
+            } catch (_) {}
+        }
+        return item;
+    },
+
+    // ─────────────────────────────────────────
     // FULL STATE LOADER
     // ─────────────────────────────────────────
 
@@ -2611,6 +2638,7 @@ const AeroDB = {
             blackoutDates,
             offboardingRecords,
             taxVault1099,
+            stateNexus,
         ] = await Promise.all([
             soft(() => this.getEmployees(), []),
             soft(() => this.getPayrollHistory(), []),
@@ -2649,6 +2677,7 @@ const AeroDB = {
             soft(() => this.getBlackoutDates(), []),
             soft(() => this.getOffboardingRecords(), []),
             soft(() => this.get1099VaultRecords(), []),
+            soft(() => this.getStateNexusList(), []),
         ]);
 
         const userIdToLabel = {};
@@ -2723,6 +2752,7 @@ const AeroDB = {
             blackoutDates:   blackoutDates || [],
             offboardingRecords: offboardingRecords || [],
             taxVault1099:    taxVault1099 || [],
+            stateNexus:      stateNexus || [],
             burnRateBudget:  { monthly: 45000 },
             splitDeposits:   {},
         };

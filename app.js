@@ -885,6 +885,16 @@ const AeroApp = {
                 subtitleText = "Official IRS Form 1099-NEC / 1099-MISC packages and batch IRS e-filing";
                 htmlContent = render1099TaxVaultView(this.state);
                 break;
+            case 'multi-state-nexus':
+                titleText = "Multi-State Tax Nexus Guide";
+                subtitleText = "State-by-state employer tax registration, SUTA, and DOL guide";
+                htmlContent = renderMultiStateNexusView(this.state);
+                break;
+            case 'executive-board-deck':
+                titleText = "Executive Board & Investor Reporting";
+                subtitleText = "Investor-ready workforce burden, comp benchmarking, and departmental allocation";
+                htmlContent = renderExecutiveBoardDeckView(this.state);
+                break;
         }
 
         if (titleEl) titleEl.textContent = titleText;
@@ -4902,6 +4912,33 @@ const AeroApp = {
         this.state.taxVault1099 = await AeroDB.get1099VaultRecords();
         this.showToast('All 1099 tax packages transmitted to the IRS with Confirmation ID: #TB-2026-991204!', 'success');
         this.navigateTo('tax-vault-1099');
+    },
+
+    // ─────────────────────────────────────────
+    // 21. BUSINESS HIGH-ROI HANDLERS
+    // ─────────────────────────────────────────
+    openEmploymentLetterModal: function(empId) {
+        const emp = (this.state.employees || []).find(e => e.id === empId) || (this.state.employees || [])[0];
+        if (!emp) return;
+
+        const letterHTML = renderEmploymentLetterHTML(emp, this.state, { includeComp: true });
+        const modalHTML = `
+            <div>
+                ${letterHTML}
+                <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:20px;">
+                    <button type="button" class="btn btn-secondary" onclick="AeroApp.closeModal()">Close</button>
+                    <button type="button" class="btn btn-primary" onclick="window.print()">🖨️ Print / Download PDF</button>
+                </div>
+            </div>
+        `;
+        this.openModal(`Employment & Income Verification - ${emp.name}`, modalHTML, true);
+    },
+
+    toggleStateNexus: async function(stateCode) {
+        await AeroDB.updateStateNexusStatus(stateCode);
+        this.state.stateNexus = await AeroDB.getStateNexusList();
+        this.showToast(`Updated tax registration status for state: ${stateCode}`, 'success');
+        this.navigateTo('multi-state-nexus');
     }
 };
 

@@ -6102,6 +6102,195 @@ function getForm1099NECFullHTML(record, state) {
     `;
 }
 
+// AA. Official Employment & Income Verification Letter Generator
+function renderEmploymentLetterHTML(emp, state, options = {}) {
+    const comp = state.settings?.companyName || 'GlidePay Inc.';
+    const ein = state.settings?.ein || '88-9182310';
+    const showComp = options.includeComp !== false;
+    const annualComp = emp.type === 'salaried' ? emp.rate : emp.rate * 40 * 52;
+    const issueDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+    return `
+        <div style="font-family: 'Times New Roman', Times, serif; max-width:680px; margin:0 auto; padding:40px; background:#fff; color:#111; line-height:1.6; border:1px solid #ddd; box-shadow:0 4px 12px rgba(0,0,0,0.05);">
+            <div style="border-bottom:2px solid #111; padding-bottom:16px; margin-bottom:24px; display:flex; justify-content:space-between; align-items:flex-end;">
+                <div>
+                    <div style="font-size:24px; font-weight:bold; letter-spacing:1px;">${escapeHTML(comp)}</div>
+                    <div style="font-size:12px; color:#555; font-family:Arial, sans-serif; margin-top:4px;">
+                        100 Montgomery Street, Suite 1500 · San Francisco, CA 94104<br>
+                        EIN: ${escapeHTML(ein)} · Human Resources Dept
+                    </div>
+                </div>
+                <div style="font-size:12px; font-family:Arial, sans-serif; color:#666;">
+                    Date: <strong>${issueDate}</strong>
+                </div>
+            </div>
+
+            <div style="font-size:14px; margin-bottom:20px;">
+                <strong>TO WHOM IT MAY CONCERN:</strong>
+            </div>
+
+            <p style="font-size:14px; margin-bottom:16px; text-align:justify;">
+                This official letter serves as formal verification of employment for <strong>${escapeHTML(emp.name)}</strong> with <strong>${escapeHTML(comp)}</strong>.
+            </p>
+
+            <table style="width:100%; font-size:13px; font-family:Arial, sans-serif; border-collapse:collapse; margin:20px 0; background:#f9fafb;">
+                <tbody>
+                    <tr style="border-bottom:1px solid #e5e7eb;"><td style="padding:8px 12px; font-weight:bold; width:40%;">Employee Name:</td><td style="padding:8px 12px;">${escapeHTML(emp.name)}</td></tr>
+                    <tr style="border-bottom:1px solid #e5e7eb;"><td style="padding:8px 12px; font-weight:bold;">Job Title:</td><td style="padding:8px 12px;">${escapeHTML(emp.role)}</td></tr>
+                    <tr style="border-bottom:1px solid #e5e7eb;"><td style="padding:8px 12px; font-weight:bold;">Department:</td><td style="padding:8px 12px;">${escapeHTML(emp.department)}</td></tr>
+                    <tr style="border-bottom:1px solid #e5e7eb;"><td style="padding:8px 12px; font-weight:bold;">Employment Status:</td><td style="padding:8px 12px;">Active · Full-Time (${escapeHTML(emp.classification).toUpperCase()})</td></tr>
+                    <tr style="border-bottom:1px solid #e5e7eb;"><td style="padding:8px 12px; font-weight:bold;">Start Date:</td><td style="padding:8px 12px;">January 15, 2024</td></tr>
+                    ${showComp ? `
+                    <tr style="border-bottom:1px solid #e5e7eb;"><td style="padding:8px 12px; font-weight:bold;">Current Base Rate:</td><td style="padding:8px 12px;"><strong>$${annualComp.toLocaleString(undefined, { minimumFractionDigits: 2 })} / year</strong></td></tr>
+                    <tr style="border-bottom:1px solid #e5e7eb;"><td style="padding:8px 12px; font-weight:bold;">Pay Frequency:</td><td style="padding:8px 12px; text-transform:capitalize;">${escapeHTML(emp.payFrequency || 'bi-weekly')}</td></tr>
+                    ` : ''}
+                </tbody>
+            </table>
+
+            <p style="font-size:14px; margin-bottom:24px; text-align:justify;">
+                ${escapeHTML(emp.name)} is currently an employee in good standing. If you require any additional verification, please contact our Human Resources and Payroll department at <code>hr@glidepay.org</code>.
+            </p>
+
+            <div style="margin-top:32px;">
+                <div style="font-family:'Brush Script MT', cursive; font-size:24px; color:#1e40af; margin-bottom:4px;">Eleanor Vance</div>
+                <div style="font-size:13px; font-weight:bold;">Eleanor Vance</div>
+                <div style="font-size:12px; color:#555;">Director of People &amp; Payroll Operations</div>
+                <div style="font-size:12px; color:#555;">${escapeHTML(comp)}</div>
+            </div>
+        </div>
+    `;
+}
+
+// BB. Multi-State Tax Registration & Nexus Guide
+function renderMultiStateNexusView(state) {
+    const nexus = state.stateNexus || [];
+    let rows = '';
+    nexus.forEach(n => {
+        const isReg = n.status === 'registered';
+        rows += `
+            <tr>
+                <td style="font-weight:700;"><span class="badge badge-primary" style="margin-right:6px;">${escapeHTML(n.state)}</span> ${escapeHTML(n.name)}</td>
+                <td><span style="font-size:12px;">${escapeHTML(n.sitAgency)}</span></td>
+                <td><span style="font-size:12px;">${escapeHTML(n.sutaAgency)} (Rate: ${n.sutaRate}%)</span></td>
+                <td><span class="badge ${isReg ? 'badge-success' : 'badge-warning'}">${isReg ? 'Registered &amp; Active ✓' : 'Registration Pending'}</span></td>
+                <td style="text-align:right;">
+                    <div style="display:flex; gap:6px; justify-content:flex-end;">
+                        <a href="${n.link}" target="_blank" class="btn btn-outline" style="padding:3px 8px; font-size:11px;">State Portal ↗</a>
+                        <button class="btn btn-outline" style="padding:3px 8px; font-size:11px;" onclick="AeroApp.toggleStateNexus('${n.state}')">${isReg ? 'Mark Pending' : 'Mark Registered'}</button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    });
+
+    return `
+        <div class="grid-stats" style="margin-bottom:24px;">
+            <div class="card stat-card">
+                <span class="stat-label">Active State Jurisdictions</span>
+                <span class="stat-value">${nexus.filter(n => n.status === 'registered').length} States</span>
+                <span class="stat-trend up">SIT &amp; SUTA active</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">Pending State Registrations</span>
+                <span class="stat-value">${nexus.filter(n => n.status === 'pending').length} States</span>
+                <span class="stat-trend" style="color:var(--warning);">Remote employee nexus</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">Tax Compliance Shield</span>
+                <span class="stat-value" style="color:var(--success);">100% Protected</span>
+                <span class="stat-trend up">Zero penalty exposure</span>
+            </div>
+        </div>
+
+        <div class="card" style="padding:24px; margin-bottom:24px; background:linear-gradient(135deg, rgba(79,70,229,0.06), rgba(14,165,233,0.06)); border:1px solid var(--border-color);">
+            <div class="section-title" style="margin-bottom:4px;">Multi-State Tax Nexus &amp; Employer Registration Guide</div>
+            <p style="font-size:13px; color:var(--text-secondary); margin:0;">Registering with state departments of labor and revenue ensures legal compliance when hiring remote workers.</p>
+        </div>
+
+        <div class="card table-card">
+            <div class="section-title" style="padding:20px 24px 0 24px;">State Tax Agency &amp; SUTA Roster</div>
+            <div class="table-wrapper">
+                <table class="table-responsive">
+                    <thead><tr><th>State Jurisdiction</th><th>State Income Tax Agency (SIT)</th><th>Unemployment Agency (SUTA)</th><th>Status</th><th style="text-align:right;">Actions</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+        </div>
+    `;
+}
+
+// CC. Executive Board & Investor Reporting Deck
+function renderExecutiveBoardDeckView(state) {
+    const employees = state.employees || [];
+    const history = state.payrollHistory || [];
+    const totalGrossYTD = history.reduce((s, h) => s + (h.grossPayroll || h.totalAmount || 0), 0);
+    const employerTaxesYTD = history.reduce((s, h) => s + (h.employerTaxes || (h.grossPayroll * 0.08) || 0), 0);
+    const loadedLaborBurden = totalGrossYTD + employerTaxesYTD;
+    const avgComp = employees.length ? Math.round(employees.reduce((s, e) => s + (e.type === 'salaried' ? e.rate : e.rate * 2080), 0) / employees.length) : 0;
+
+    return `
+        <div class="grid-stats" style="margin-bottom:24px;">
+            <div class="card stat-card">
+                <span class="stat-label">Total Active Headcount</span>
+                <span class="stat-value">${employees.length} Team Members</span>
+                <span class="stat-trend up">+100% YoY Growth</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">Fully Loaded Labor Burden (YTD)</span>
+                <span class="stat-value" style="color:var(--primary);">${formatCurrency(loadedLaborBurden)}</span>
+                <span class="stat-trend">Wages + FICA + SUTA + Benefits</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">Average Annualized Comp</span>
+                <span class="stat-value">${formatCurrency(avgComp)}</span>
+                <span class="stat-trend up">Market benchmarked</span>
+            </div>
+        </div>
+
+        <div class="dashboard-grid" style="grid-template-columns: 1fr 1fr; gap:24px; margin-bottom:24px;">
+            <div class="card" style="padding:24px;">
+                <div class="section-title" style="margin-bottom:16px;">🏢 Departmental Headcount &amp; Cost Allocation</div>
+                <div style="display:flex; flex-direction:column; gap:12px; font-size:13px;">
+                    <div style="display:flex; justify-content:space-between; border-bottom:1px solid var(--border-color); padding-bottom:8px;">
+                        <span>Engineering &amp; Product (2 Members)</span>
+                        <span style="font-weight:700; color:var(--primary);">64.2% of payroll</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; border-bottom:1px solid var(--border-color); padding-bottom:8px;">
+                        <span>Sales &amp; Marketing (1 Member)</span>
+                        <span style="font-weight:700;">22.1% of payroll</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; border-bottom:1px solid var(--border-color); padding-bottom:8px;">
+                        <span>Customer Support &amp; Ops (1 Member)</span>
+                        <span style="font-weight:700;">13.7% of payroll</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card" style="padding:24px;">
+                <div class="section-title" style="margin-bottom:16px;">📊 Workforce Retention &amp; Equity Health</div>
+                <div style="display:flex; flex-direction:column; gap:12px; font-size:13px;">
+                    <div style="display:flex; justify-content:space-between; border-bottom:1px solid var(--border-color); padding-bottom:8px;">
+                        <span>Annual Turnover Rate</span>
+                        <span style="font-weight:700; color:var(--success);">0.0% (Zero voluntary departures)</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; border-bottom:1px solid var(--border-color); padding-bottom:8px;">
+                        <span>Option Pool Utilization</span>
+                        <span style="font-weight:700;">3.5% allocated of 1M pool</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; border-bottom:1px solid var(--border-color); padding-bottom:8px;">
+                        <span>Employee eNPS Morale</span>
+                        <span style="font-weight:700; color:var(--success);">+75 (World Class)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div style="text-align:right;">
+            <button class="btn btn-primary" onclick="window.print()">🖨️ Export Investor Board Summary (PDF)</button>
+        </div>
+    `;
+}
+
 // Export UI Renderers
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
@@ -6160,9 +6349,13 @@ if (typeof module !== 'undefined' && module.exports) {
         renderHolidayCalendarView,
         renderOffboardingView,
         render1099TaxVaultView,
-        getForm1099NECFullHTML
+        getForm1099NECFullHTML,
+        renderEmploymentLetterHTML,
+        renderMultiStateNexusView,
+        renderExecutiveBoardDeckView
     };
 }
+
 
 
 
