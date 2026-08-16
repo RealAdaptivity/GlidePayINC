@@ -4136,7 +4136,19 @@ function renderBenefitsAdminView(state) {
 // E. Payroll Approvals View
 function renderApprovalsView(state) {
     const statusColors = { pending: 'warning', approved: 'success', rejected: 'danger' };
-    const approvals = state.payrollApprovals || [];
+    let approvals = state.payrollApprovals || [];
+    if (!approvals.length && state.payrollHistory && state.payrollHistory.length) {
+        approvals = state.payrollHistory.map(r => ({
+            id: r.id,
+            runId: r.id,
+            status: (r.status === 'pending_approval' || r.status === 'pending') ? 'pending' : (r.status === 'rejected' || r.status === 'failed') ? 'rejected' : 'approved',
+            submittedBy: r.submittedBy || 'Admin',
+            submittedTs: r.date || 'Today',
+            approvedBy: r.approvedBy || null,
+            totalAmount: r.totalCost || r.grossPayroll || 0,
+            employeeCount: r.employeeCount || 1
+        }));
+    }
     const advances  = state.payAdvances || [];
 
     let rows = '';

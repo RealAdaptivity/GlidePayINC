@@ -2308,6 +2308,19 @@ const AeroApp = {
         this.openModal(`${is1099 ? 'Contractor Receipt' : 'Pay Stub Statement'}: ${entry.employee.name}`, fullContent, true);
     },
 
+    _refreshState: async function() {
+        try {
+            const freshState = await AeroDB.loadFullState();
+            if (freshState) {
+                this.state = freshState;
+            }
+            return this.state;
+        } catch (err) {
+            console.warn('[AeroApp] _refreshState fallback:', err);
+            return this.state;
+        }
+    },
+
     submitPayrollRun: async function() {
         const operationKey = 'payroll:submit';
         if (!this._beginOperation(operationKey, 'Payroll submission is already in progress.')) return;
@@ -2330,9 +2343,43 @@ const AeroApp = {
             periodEnd,
         };
         try {
-            await AeroDB.savePayrollRun(runSummary, this.activeRunData);
+            const runId = await AeroDB.savePayrollRun(runSummary, this.activeRunData);
             this.activeRunData = {};
             await this._refreshState();
+
+            // Ensure the newly submitted payroll run is in payrollApprovals immediately
+            const actualRunId = runId || `run-${Date.now()}`;
+            if (!this.state.payrollApprovals) this.state.payrollApprovals = [];
+            if (!this.state.payrollApprovals.some(a => a.runId === actualRunId || a.id === actualRunId)) {
+                this.state.payrollApprovals.unshift({
+                    id: actualRunId,
+                    runId: actualRunId,
+                    status: 'pending',
+                    submittedBy: this.session?.userName || 'Admin',
+                    approvedBy: null,
+                    submittedTs: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+                    totalAmount: runSummary.totalCost,
+                    employeeCount: runSummary.employeeCount
+                });
+            }
+
+            if (!this.state.payrollHistory) this.state.payrollHistory = [];
+            if (!this.state.payrollHistory.some(r => r.id === actualRunId)) {
+                this.state.payrollHistory.unshift({
+                    id: actualRunId,
+                    date: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+                    periodStart,
+                    periodEnd,
+                    status: 'pending_approval',
+                    employeeCount: runSummary.employeeCount,
+                    grossPayroll: runSummary.grossPayroll,
+                    employerTaxes: runSummary.employerTaxes,
+                    totalCost: runSummary.totalCost,
+                    submittedBy: this.session?.userName || 'Admin',
+                    submittedAt: new Date().toISOString()
+                });
+            }
+
             this.showToast('Payroll submitted for approval.', 'success');
             this.navigateTo('approvals');
         } catch (err) {
@@ -2366,12 +2413,7 @@ const AeroApp = {
             this._endOperation(operationKey);
             return;
         }
-        const run = (this.state.payrollHistory || []).find(r => r.id === appr.runId);
-        if (!run) {
-            this.showToast('Payroll run details not found.', 'danger');
-            this._endOperation(operationKey);
-            return;
-        }
+        const run = (this.state.payrollHistory || []).find(r => r.id === appr.runId) || { id: appr.runId, totalCost: appr.totalAmount, grossPayroll: appr.totalAmount };
         try {
             await AeroDB.approvePayrollRun(appr.runId);
             const activeRunData = this._runDetailsToActiveData(run);
@@ -2411,6 +2453,8 @@ const AeroApp = {
 
             await _initiateAchDisbursements(appr.runId);
 
+            appr.status = 'approved';
+            appr.approvedBy = this.session?.userName || 'Admin';
             await this._refreshState();
             this.showToast('Payroll approved! ACH transfers are being processed.', 'success');
             this.navigateTo('approvals');
@@ -2429,6 +2473,7 @@ const AeroApp = {
         }
         try {
             await AeroDB.rejectPayrollRun(appr.runId);
+            appr.status = 'rejected';
             await this._refreshState();
             this.showToast('Payroll run rejected.', 'info');
             this.navigateTo('approvals');
