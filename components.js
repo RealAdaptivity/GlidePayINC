@@ -4581,19 +4581,23 @@ function renderEmployeeBenefitsView(state, employeeId) {
         </div>`;
 }
 
-// K. Employee 401k View
+// K. Employee 401k & Roth IRA View with Live Tax & Take-Home Visualizer
 function renderEmployee401kView(state, employeeId) {
     const employee = state.employees.find(e => e.id === employeeId);
     if (!employee) return '<div class="card">Employee not found.</div>';
 
     const rate401k = (employee.benefits && employee.benefits.rate401k) || 0;
+    const rateRoth = (employee.benefits && employee.benefits.rateRoth) || 0;
     const annualSalary = employee.type === 'salaried' ? employee.rate : employee.rate * 40 * 52;
-    const annualContrib = annualSalary * (rate401k / 100);
-    const employerMatch = Math.min(annualContrib, annualSalary * 0.04);
+    const annualContrib = annualSalary * ((rate401k + rateRoth) / 100);
+    const employerMatch = Math.min(annualSalary * (rate401k / 100), annualSalary * 0.04);
     const ytdContrib = annualContrib * 0.45;
     const ytdMatch = employerMatch * 0.45;
     const totalBalance = ytdContrib + ytdMatch + (annualSalary * 0.15);
     const vestingPct = 80;
+
+    const estTaxSavings = (annualSalary * (rate401k / 100) * 0.24).toFixed(0);
+    const perCheckDeduction = (annualContrib / 26).toFixed(2);
 
     return `
         <div class="grid-stats" style="margin-bottom:24px;">
@@ -4608,42 +4612,63 @@ function renderEmployee401kView(state, employeeId) {
                 <span class="stat-trend up">+ ${formatCurrency(ytdMatch)} employer match</span>
             </div>
             <div class="card stat-card">
-                <div class="stat-header"><span class="stat-label">Contribution Rate</span><div class="stat-icon warning"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg></div></div>
-                <span class="stat-value">${rate401k}%</span>
-                <span class="stat-trend">Employer matches up to 4%</span>
+                <div class="stat-header"><span class="stat-label">Est. Annual Tax Savings</span><div class="stat-icon success"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div></div>
+                <span class="stat-value" style="color:var(--success);">$${parseInt(estTaxSavings).toLocaleString()}/yr</span>
+                <span class="stat-trend up">Pre-tax sheltering</span>
             </div>
         </div>
 
-        <div class="dashboard-grid">
-            <div class="card" style="padding:24px;grid-column:span 2;">
-                <div class="section-title">Projected Balance to Age 65</div>
-                <div id="k401ChartContainer" style="height:220px;margin-top:16px;"></div>
-            </div>
-        </div>
+        <div class="dashboard-grid" style="grid-template-columns: 1fr 1fr; gap:24px;">
+            <div class="card" style="padding:24px;">
+                <div class="section-title" style="margin-bottom:16px;">📈 Interactive 401(k) Contribution Slider</div>
+                <p style="font-size:13px; color:var(--text-secondary); margin-bottom:20px;">Adjust your contribution percentages in real time to see instant projected tax savings and take-home pay impact.</p>
 
-        <div class="dashboard-grid" style="margin-top:24px;">
-            <div class="card" style="padding:24px;">
-                <div class="section-title">Plan Details</div>
-                <div style="margin-top:16px;display:flex;flex-direction:column;gap:12px;font-size:13px;">
-                    ${[
-                        ['Plan Type', 'Traditional 401(k)'],
-                        ['Employee Contribution', rate401k + '% of gross — ' + formatCurrency(annualContrib/26) + '/paycheck'],
-                        ['Employer Match', '100% up to 4% — ' + formatCurrency(employerMatch/26) + '/paycheck'],
-                        ['Vesting Schedule', vestingPct + '% vested (4-year graded)'],
-                        ['2026 IRS Limit', formatCurrency(23000)],
-                        ['YTD Status', formatCurrency(ytdContrib) + ' of ' + formatCurrency(23000) + ' limit']
-                    ].map(([k,v])=>`<div style="display:flex;justify-content:space-between;border-bottom:1px solid var(--border-color);padding-bottom:10px;"><span style="color:var(--text-secondary);">${k}</span><span style="font-weight:600;text-align:right;">${v}</span></div>`).join('')}
+                <div class="form-group" style="margin-bottom:20px;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                        <label style="font-weight:600;">Pre-Tax Traditional 401(k)</label>
+                        <span id="rate401kDisplay" style="font-weight:700; color:var(--primary); font-size:16px;">${rate401k}%</span>
+                    </div>
+                    <input type="range" id="slider401k" min="0" max="25" step="1" value="${rate401k}" oninput="AeroApp.updateRetirementPreview('${employeeId}', ${annualSalary})" style="width:100%;" />
+                    <div style="font-size:11px; color:var(--text-tertiary); margin-top:4px;">Lowers current taxable income immediately.</div>
                 </div>
+
+                <div class="form-group" style="margin-bottom:24px;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                        <label style="font-weight:600;">Post-Tax Roth 401(k)</label>
+                        <span id="rateRothDisplay" style="font-weight:700; color:var(--success); font-size:16px;">${rateRoth}%</span>
+                    </div>
+                    <input type="range" id="sliderRoth" min="0" max="25" step="1" value="${rateRoth}" oninput="AeroApp.updateRetirementPreview('${employeeId}', ${annualSalary})" style="width:100%;" />
+                    <div style="font-size:11px; color:var(--text-tertiary); margin-top:4px;">Grows 100% tax-free at retirement withdrawal.</div>
+                </div>
+
+                <button class="btn btn-primary" style="width:100%; font-size:13px;" onclick="AeroApp.saveRetirementContribution('${employeeId}')">Save Contribution Rates 🚀</button>
             </div>
-            <div class="card" style="padding:24px;">
-                <div class="section-title">Change Contribution Rate</div>
-                <p style="font-size:13px;color:var(--text-secondary);margin-top:8px;margin-bottom:16px;">Adjust your 401(k) deferral rate. Changes take effect next payroll cycle.</p>
-                <div class="form-group">
-                    <label>New Contribution Rate (%)</label>
-                    <input type="range" id="k401RateSlider" min="0" max="25" step="1" value="${rate401k}" oninput="document.getElementById('k401RateDisplay').textContent=this.value+'%'" style="width:100%;margin:12px 0;">
-                    <div style="text-align:center;font-size:24px;font-weight:800;color:var(--primary);" id="k401RateDisplay">${rate401k}%</div>
+
+            <div class="card" style="padding:24px; background:var(--bg-secondary);">
+                <div class="section-title" style="margin-bottom:16px;">💵 Real-Time Take-Home Pay Impact</div>
+                
+                <div style="display:flex; flex-direction:column; gap:12px; font-size:13px;">
+                    <div style="display:flex; justify-content:space-between; border-bottom:1px solid var(--border-color); padding-bottom:8px;">
+                        <span style="color:var(--text-secondary);">Gross Salary</span>
+                        <span style="font-weight:600;">${formatCurrency(annualSalary)}/yr</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; border-bottom:1px solid var(--border-color); padding-bottom:8px;">
+                        <span style="color:var(--text-secondary);">Per-Paycheck Deduction</span>
+                        <span id="previewDeduction" style="font-weight:700; color:var(--primary);">$${perCheckDeduction}/check</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; border-bottom:1px solid var(--border-color); padding-bottom:8px;">
+                        <span style="color:var(--text-secondary);">Employer 4% Match (Free Money)</span>
+                        <span style="font-weight:700; color:var(--success);">${formatCurrency(employerMatch)}/yr</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; border-bottom:1px solid var(--border-color); padding-bottom:8px;">
+                        <span style="color:var(--text-secondary);">Estimated Tax Savings</span>
+                        <span id="previewTaxSavings" style="font-weight:700; color:var(--success);">$${parseInt(estTaxSavings).toLocaleString()}/yr</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; padding-top:4px;">
+                        <span style="color:var(--text-secondary);">2026 IRS Maximum Limit</span>
+                        <span style="font-weight:600;">$23,500</span>
+                    </div>
                 </div>
-                <button class="btn btn-primary" style="width:100%;margin-top:12px;" onclick="AeroApp.update401kRate('${employeeId}')">Update Rate</button>
             </div>
         </div>`;
 }
@@ -5427,9 +5452,12 @@ function renderSpendCardsView(state) {
         <div class="card" style="padding:24px; margin-bottom:24px; background:linear-gradient(135deg, rgba(79,70,229,0.06), rgba(16,185,129,0.06)); border:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
             <div>
                 <div class="section-title" style="margin-bottom:4px;">Corporate Spend Cards &amp; Expense Controls</div>
-                <p style="font-size:13px; color:var(--text-secondary); margin:0;">Issue instant corporate cards with automated spend limits and merchant category controls.</p>
+                <p style="font-size:13px; color:var(--text-secondary); margin:0;">Issue instant corporate cards with automated spend limits, category locks, and AI receipt matching.</p>
             </div>
-            <button class="btn btn-primary" onclick="AeroApp.openIssueSpendCardModal()">+ Issue Virtual Card</button>
+            <div style="display:flex; gap:12px;">
+                <button class="btn btn-outline" onclick="AeroApp.openReceiptScannerModal()">📷 Scan Receipt (OCR)</button>
+                <button class="btn btn-primary" onclick="AeroApp.openIssueSpendCardModal()">+ Issue Virtual Card</button>
+            </div>
         </div>
 
         <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap:20px;">

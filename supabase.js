@@ -2454,6 +2454,47 @@ const AeroDB = {
     },
 
     // ─────────────────────────────────────────
+    // 20. RECEIPT OCR & RETIREMENT SLIDERS
+    // ─────────────────────────────────────────
+    _localReceipts: [],
+
+    async saveReceiptOCR(receipt) {
+        const newReceipt = {
+            id: 'rcpt_' + Date.now(),
+            merchant: receipt.merchant || 'Expense Vendor',
+            amount: parseFloat(receipt.amount) || 0,
+            tax: parseFloat(receipt.tax) || 0,
+            date: receipt.date || new Date().toISOString().slice(0, 10),
+            category: receipt.category || 'Meals & Entertainment',
+            cardLast4: receipt.cardLast4 || '4821',
+            status: 'matched',
+            scannedAt: new Date().toISOString()
+        };
+        this._localReceipts.unshift(newReceipt);
+        try {
+            await this.addAuditLog('Receipt OCR Processed', `Scanned receipt from ${newReceipt.merchant} for $${newReceipt.amount.toFixed(2)}`, 'expenses');
+        } catch (_) {}
+        return newReceipt;
+    },
+
+    async updateRetirementContribution(empId, rate401k, rateRoth) {
+        const emp = (await this.getEmployees()).find(e => e.id === empId);
+        if (emp) {
+            emp.benefits = emp.benefits || {};
+            emp.benefits.rate401k = parseFloat(rate401k) || 0;
+            emp.benefits.rateRoth = parseFloat(rateRoth) || 0;
+            emp.rate_401k = emp.benefits.rate401k;
+            try {
+                await _sb.from('employees').update({ rate_401k: emp.rate_401k }).eq('id', empId);
+            } catch (_) {}
+            try {
+                await this.addAuditLog('401(k) Contribution Adjusted', `${emp.name} set 401(k) contribution to ${rate401k}% (Pre-Tax) & ${rateRoth}% (Roth)`, 'benefits');
+            } catch (_) {}
+        }
+        return emp;
+    },
+
+    // ─────────────────────────────────────────
     // FULL STATE LOADER
     // ─────────────────────────────────────────
 
