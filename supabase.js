@@ -222,6 +222,22 @@ const AeroDB = {
     },
 
     /**
+     * Bootstrap a company and owner membership for a signed-in user without a company.
+     */
+    async bootstrapNewCompany(userId, companyName) {
+        const company = _check(
+            await _sb.from('companies').insert({ name: companyName || 'My Organization', owner_id: userId }).select().single(),
+            'bootstrapNewCompany → create company'
+        );
+        _check(
+            await _sb.from('company_users').insert({ company_id: company.id, user_id: userId, role: 'owner' }),
+            'bootstrapNewCompany → company_users'
+        );
+        await _sb.from('integrations').insert({ company_id: company.id }).maybeSingle();
+        return company;
+    },
+
+    /**
      * Sign in an existing user.
      * @returns {{ user, session }}
      */

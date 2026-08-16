@@ -339,13 +339,24 @@ const AeroApp = {
                 if (!hasCompanyAdmin) {
                     if (empRecord) {
                         this.showToast('That account is for the Employee Portal — use the Employee tab to sign in.', 'warning');
+                        await AeroDB.signOut();
+                        return;
                     } else {
-                        this.showToast('No company admin access for this account. Register a company or use the Employee tab.', 'warning');
+                        // Auto-bootstrap company for fresh admin users so they can immediately access their dashboard
+                        try {
+                            const user = await AeroDB.getUser();
+                            const companyName = user?.user_metadata?.company_name || (user?.email ? user.email.split('@')[0] + ' Org' : 'My Organization');
+                            await AeroDB.bootstrapNewCompany(user.id, companyName);
+                            mode = 'company';
+                        } catch (_bootstrapErr) {
+                            this.showToast('No company admin access for this account. Register a company or use the Employee tab.', 'warning');
+                            await AeroDB.signOut();
+                            return;
+                        }
                     }
-                    await AeroDB.signOut();
-                    return;
+                } else {
+                    mode = 'company';
                 }
-                mode = 'company';
             } else {
                 // Session restore: company admin wins only when they are not also a portal employee
                 // of a different active employer. Otherwise prefer the portal if that was last used.
@@ -356,9 +367,22 @@ const AeroApp = {
                 else if (empRecord) mode = 'employee';
                 else if (hasCompanyAdmin) mode = 'company';
                 else {
-                    this.showToast('This account has no company or employee portal access.', 'danger');
-                    await AeroDB.signOut();
-                    return;
+                    try {
+                        const user = await AeroDB.getUser();
+                        if (user) {
+                            const companyName = user?.user_metadata?.company_name || (user?.email ? user.email.split('@')[0] + ' Org' : 'My Organization');
+                            await AeroDB.bootstrapNewCompany(user.id, companyName);
+                            mode = 'company';
+                        } else {
+                            this.showToast('This account has no company or employee portal access.', 'danger');
+                            await AeroDB.signOut();
+                            return;
+                        }
+                    } catch (_err) {
+                        this.showToast('This account has no company or employee portal access.', 'danger');
+                        await AeroDB.signOut();
+                        return;
+                    }
                 }
             }
 
