@@ -757,27 +757,40 @@ const AeroDB = {
             'savePayrollRun → header'
         );
 
-        // Resolve valid database employee UUIDs for this company
+        // Resolve valid database employee UUIDs strictly for this company
         const dbEmployees = await this.getEmployees();
         const empMap = {};
         dbEmployees.forEach(e => {
-            empMap[e.id] = e;
-            if (e.email) empMap[e.email.toLowerCase()] = e;
-            if (e.name) empMap[e.name.toLowerCase()] = e;
+            if (e.company_id === company.id || !e.company_id) {
+                empMap[e.id] = e;
+                if (e.email) empMap[e.email.toLowerCase()] = e;
+                if (e.name) empMap[e.name.toLowerCase()] = e;
+            }
         });
 
         // Insert one line item per employee with validated tenant IDs
-        const lineItems = Object.entries(activeRunData).map(([empId, data], idx) => {
+        const lineItems = [];
+        const activeEntries = Object.entries(activeRunData);
+
+        for (let idx = 0; idx < activeEntries.length; idx++) {
+            const [empId, data] = activeEntries[idx];
             const r = data.results;
             const emp = data.employee || {};
-            const resolvedEmp = empMap[empId]
+            let resolvedEmp = empMap[empId]
                 || (emp.email && empMap[emp.email.toLowerCase()])
-                || (emp.name && empMap[emp.name.toLowerCase()])
-                || (dbEmployees.length ? dbEmployees[idx % dbEmployees.length] : null);
+                || (emp.name && empMap[emp.name.toLowerCase()]);
+
+            if (!resolvedEmp) {
+                if (dbEmployees.length > idx) {
+                    resolvedEmp = dbEmployees[idx];
+                } else if (dbEmployees.length > 0) {
+                    resolvedEmp = dbEmployees[0];
+                }
+            }
 
             const validEmployeeId = resolvedEmp ? resolvedEmp.id : empId;
 
-            return {
+            lineItems.push({
                 payroll_run_id:          run.id,
                 employee_id:             validEmployeeId,
                 company_id:              company.id,
@@ -807,8 +820,8 @@ const AeroDB = {
                 suta:                    r.employerTaxes.suta,
                 total_employer_taxes:    r.totalEmployerTaxes,
                 total_payroll_cost:      r.totalPayrollCost,
-            };
-        });
+            });
+        }
 
         _check(
             await _sb.from('payroll_line_items').insert(lineItems),
