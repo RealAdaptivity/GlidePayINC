@@ -754,12 +754,29 @@ const AeroDB = {
             'savePayrollRun → header'
         );
 
-        // Insert one line item per employee
+        // Resolve valid database employee UUIDs for this company
+        const dbEmployees = await this.getEmployees();
+        const empMap = {};
+        dbEmployees.forEach(e => {
+            empMap[e.id] = e;
+            if (e.email) empMap[e.email.toLowerCase()] = e;
+            if (e.name) empMap[e.name.toLowerCase()] = e;
+        });
+
+        // Insert one line item per employee with validated tenant IDs
         const lineItems = Object.entries(activeRunData).map(([empId, data]) => {
             const r = data.results;
+            const emp = data.employee || {};
+            const resolvedEmp = empMap[empId]
+                || (emp.email && empMap[emp.email.toLowerCase()])
+                || (emp.name && empMap[emp.name.toLowerCase()])
+                || dbEmployees[0];
+
+            const validEmployeeId = resolvedEmp ? resolvedEmp.id : empId;
+
             return {
                 payroll_run_id:          run.id,
-                employee_id:             empId,
+                employee_id:             validEmployeeId,
                 company_id:              company.id,
                 gross_pay:               r.grossPay,
                 regular_earnings:        r.regularEarnings,
