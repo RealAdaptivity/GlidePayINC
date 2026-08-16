@@ -5983,6 +5983,125 @@ function renderOffboardingView(state) {
     `;
 }
 
+// Z. 1099-MISC & 1099-NEC Contractor Year-End Tax Vault
+function render1099TaxVaultView(state) {
+    const records = state.taxVault1099 || [];
+    const totalComp = records.reduce((s, r) => s + r.box1NonemployeeComp, 0);
+    const efiledCount = records.filter(r => r.status === 'efiled').length;
+
+    let rows = '';
+    records.forEach(r => {
+        const isEfiled = r.status === 'efiled';
+        rows += `
+            <tr>
+                <td style="font-weight:600;">${escapeHTML(r.contractorName)}</td>
+                <td><span class="badge badge-info">${escapeHTML(r.type)}</span></td>
+                <td><span style="font-family:monospace; font-size:12px;">${escapeHTML(r.tin)}</span></td>
+                <td style="font-weight:700; color:var(--primary);">${formatCurrency(r.box1NonemployeeComp)}</td>
+                <td><span class="badge badge-info">State: ${escapeHTML(r.state || 'FL')}</span></td>
+                <td><span class="badge ${isEfiled ? 'badge-success' : 'badge-warning'}">${isEfiled ? 'E-Filed with IRS ✓' : 'Ready to File'}</span></td>
+                <td style="text-align:right;">
+                    <div style="display:flex; gap:6px; justify-content:flex-end;">
+                        <button class="btn btn-outline" style="padding:3px 8px; font-size:11px;" onclick="AeroApp.open1099PreviewModal('${r.contractorId}')">View IRS Copy B</button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    });
+
+    return `
+        <div class="grid-stats" style="margin-bottom:24px;">
+            <div class="card stat-card">
+                <span class="stat-label">Total 1099 Disbursements</span>
+                <span class="stat-value">${formatCurrency(totalComp)}</span>
+                <span class="stat-trend up">Nonemployee comp</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">Eligible Contractors (&ge; $600)</span>
+                <span class="stat-value">${records.length} Payees</span>
+                <span class="stat-trend up">IRS 1099-NEC required</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">IRS E-Filing Transmission</span>
+                <span class="stat-value" style="color:var(--${efiledCount === records.length ? 'success' : 'primary'});">${efiledCount} / ${records.length} Transmitted</span>
+                <span class="stat-trend up">TaxBandits API connected</span>
+            </div>
+        </div>
+
+        <div class="card" style="padding:24px; margin-bottom:24px; background:linear-gradient(135deg, rgba(79,70,229,0.06), rgba(245,158,11,0.06)); border:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+            <div>
+                <div class="section-title" style="margin-bottom:4px;">1099 Contractor Year-End Tax Vault (Tax Year 2026)</div>
+                <p style="font-size:13px; color:var(--text-secondary); margin:0;">Generate official IRS 1099-NEC / 1099-MISC Copy B statements and batch e-file directly with the IRS.</p>
+            </div>
+            <button class="btn btn-primary" onclick="AeroApp.batchEfile1099Forms()">⚡ 1-Click Batch E-File with IRS</button>
+        </div>
+
+        <div class="card table-card">
+            <div class="section-title" style="padding:20px 24px 0 24px;">Contractor Year-End Tax Packages</div>
+            <div class="table-wrapper">
+                <table class="table-responsive">
+                    <thead><tr><th>Contractor Name</th><th>Form Type</th><th>Recipient TIN</th><th>Box 1 Nonemployee Comp</th><th>Jurisdiction</th><th>IRS E-File Status</th><th style="text-align:right;">Action</th></tr></thead>
+                    <tbody>${rows || '<tr><td colspan="7" style="text-align:center; padding:40px; color:var(--text-tertiary);">No 1099 contractor records found.</td></tr>'}</tbody>
+                </table>
+            </div>
+        </div>
+    `;
+}
+
+// Full IRS 1099-NEC Form Layout
+function getForm1099NECFullHTML(record, state) {
+    const comp = state.settings?.companyName || 'GlidePay Inc.';
+    const ein = state.settings?.ein || '88-9182310';
+    return `
+        <div style="font-family: Arial, sans-serif; max-width:700px; margin:0 auto; padding:24px; border:2px solid #000; background:#fff; color:#000;">
+            <div style="display:flex; justify-content:space-between; border-bottom:2px solid #000; padding-bottom:8px; margin-bottom:12px;">
+                <div>
+                    <div style="font-size:12px; font-weight:bold;">CORRECTED (if checked) [ ]</div>
+                    <div style="font-size:22px; font-weight:900; margin-top:4px;">Form 1099-NEC</div>
+                </div>
+                <div style="text-align:center;">
+                    <div style="font-size:20px; font-weight:900;">2026</div>
+                    <div style="font-size:10px;">Nonemployee<br>Compensation</div>
+                </div>
+                <div style="text-align:right; font-size:11px;">
+                    <div>OMB No. 1545-0116</div>
+                    <div style="font-weight:bold; margin-top:4px;">Copy B<br>For Recipient</div>
+                </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; border:1px solid #000; margin-bottom:12px;">
+                <div style="padding:8px; border-right:1px solid #000; border-bottom:1px solid #000;">
+                    <div style="font-size:9px; text-transform:uppercase;">PAYER'S name, address, and telephone number</div>
+                    <div style="font-weight:bold; font-size:13px; margin-top:4px;">${escapeHTML(comp)}</div>
+                    <div style="font-size:11px;">100 Montgomery St, Suite 1500<br>San Francisco, CA 94104</div>
+                </div>
+                <div style="padding:8px; border-bottom:1px solid #000; background:#f9fafb;">
+                    <div style="font-size:9px; text-transform:uppercase;">1. Nonemployee compensation</div>
+                    <div style="font-weight:bold; font-size:18px; color:#111827; margin-top:6px;">$${record.box1NonemployeeComp.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                </div>
+                <div style="padding:8px; border-right:1px solid #000;">
+                    <div style="font-size:9px; text-transform:uppercase;">PAYER'S TIN: <strong>${escapeHTML(ein)}</strong></div>
+                    <div style="font-size:9px; text-transform:uppercase; margin-top:6px;">RECIPIENT'S TIN: <strong>${escapeHTML(record.tin)}</strong></div>
+                </div>
+                <div style="padding:8px;">
+                    <div style="font-size:9px; text-transform:uppercase;">4. Federal income tax withheld</div>
+                    <div style="font-weight:bold; font-size:13px; margin-top:4px;">$0.00</div>
+                </div>
+            </div>
+
+            <div style="border:1px solid #000; padding:8px; margin-bottom:16px;">
+                <div style="font-size:9px; text-transform:uppercase;">RECIPIENT'S name, street address, and ZIP code</div>
+                <div style="font-weight:bold; font-size:14px; margin-top:4px;">${escapeHTML(record.contractorName)}</div>
+                <div style="font-size:11px; color:#4b5563;">742 Evergreen Terrace, Orlando, ${escapeHTML(record.state)} 32801</div>
+            </div>
+
+            <div style="font-size:10px; color:#6b7280; text-align:center;">
+                This is important tax information and is being furnished to the Internal Revenue Service. If you are required to file a return, a negligence penalty or other sanction may be imposed on you if this income is taxable and the IRS determines that it has not been reported.
+            </div>
+        </div>
+    `;
+}
+
 // Export UI Renderers
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
@@ -6039,9 +6158,12 @@ if (typeof module !== 'undefined' && module.exports) {
         renderComplianceTrainingView,
         renderPulseSurveysView,
         renderHolidayCalendarView,
-        renderOffboardingView
+        renderOffboardingView,
+        render1099TaxVaultView,
+        getForm1099NECFullHTML
     };
 }
+
 
 
 

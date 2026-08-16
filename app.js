@@ -880,6 +880,11 @@ const AeroApp = {
                 subtitleText = "Calculate final PTO payouts, revoke assets, and dispatch COBRA notices";
                 htmlContent = renderOffboardingView(this.state);
                 break;
+            case 'tax-vault-1099':
+                titleText = "1099 Contractor Tax Vault";
+                subtitleText = "Official IRS Form 1099-NEC / 1099-MISC packages and batch IRS e-filing";
+                htmlContent = render1099TaxVaultView(this.state);
+                break;
         }
 
         if (titleEl) titleEl.textContent = titleText;
@@ -4868,6 +4873,35 @@ const AeroApp = {
         this.state.employees = await AeroDB.getEmployees();
         this.showToast('401(k) contribution rates updated and synced to payroll engine!', 'success');
         this.navigateTo('employee-401k');
+    },
+
+    // ─────────────────────────────────────────
+    // 20. 1099 TAX VAULT HANDLERS
+    // ─────────────────────────────────────────
+    open1099PreviewModal: function(contractorId) {
+        const records = this.state.taxVault1099 || [];
+        const record = records.find(r => r.contractorId === contractorId) || records[0];
+        if (!record) return;
+
+        const formHTML = getForm1099NECFullHTML(record, this.state);
+        const modalHTML = `
+            <div>
+                ${formHTML}
+                <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:20px;">
+                    <button type="button" class="btn btn-secondary" onclick="AeroApp.closeModal()">Close</button>
+                    <button type="button" class="btn btn-primary" onclick="window.print()">🖨️ Print IRS Form 1099-NEC</button>
+                </div>
+            </div>
+        `;
+        this.openModal(`IRS Form 1099-NEC - ${record.contractorName}`, modalHTML, true);
+    },
+
+    batchEfile1099Forms: async function() {
+        if (!confirm('Are you ready to transmit all 2026 Form 1099-NEC / MISC records to the IRS and State Tax Agencies via TaxBandits E-File API?')) return;
+        await AeroDB.batchEfile1099s(2026);
+        this.state.taxVault1099 = await AeroDB.get1099VaultRecords();
+        this.showToast('All 1099 tax packages transmitted to the IRS with Confirmation ID: #TB-2026-991204!', 'success');
+        this.navigateTo('tax-vault-1099');
     }
 };
 

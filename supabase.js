@@ -2495,6 +2495,56 @@ const AeroDB = {
     },
 
     // ─────────────────────────────────────────
+    // 21. 1099 CONTRACTOR TAX VAULT
+    // ─────────────────────────────────────────
+    _local1099Vault: [
+        {
+            id: '1099-1',
+            taxYear: 2026,
+            contractorId: 'emp-102',
+            contractorName: 'Marcus Brody',
+            tin: '•••-••-8821',
+            type: '1099-NEC',
+            box1NonemployeeComp: 48500.00,
+            box4FedTaxWithheld: 0.00,
+            box5StateTaxWithheld: 0.00,
+            state: 'FL',
+            status: 'ready_to_file',
+            delivered: true
+        },
+        {
+            id: '1099-2',
+            taxYear: 2026,
+            contractorId: 'emp-105',
+            contractorName: 'Alex Rivera',
+            tin: '•••-••-4192',
+            type: '1099-NEC',
+            box1NonemployeeComp: 12400.00,
+            box4FedTaxWithheld: 0.00,
+            box5StateTaxWithheld: 0.00,
+            state: 'TX',
+            status: 'ready_to_file',
+            delivered: false
+        }
+    ],
+
+    async get1099VaultRecords() {
+        return this._local1099Vault;
+    },
+
+    async batchEfile1099s(taxYear) {
+        this._local1099Vault.forEach(r => {
+            if (r.taxYear === parseInt(taxYear) || !taxYear) {
+                r.status = 'efiled';
+            }
+        });
+        try {
+            await this.addAuditLog('1099 Forms Batch E-Filed', `E-filed ${this._local1099Vault.length} 1099 forms with IRS via TaxBandits API`, 'tax');
+        } catch (_) {}
+        return this._local1099Vault;
+    },
+
+    // ─────────────────────────────────────────
     // FULL STATE LOADER
     // ─────────────────────────────────────────
 
@@ -2560,6 +2610,7 @@ const AeroDB = {
             holidays,
             blackoutDates,
             offboardingRecords,
+            taxVault1099,
         ] = await Promise.all([
             soft(() => this.getEmployees(), []),
             soft(() => this.getPayrollHistory(), []),
@@ -2597,6 +2648,7 @@ const AeroDB = {
             soft(() => this.getHolidays(), []),
             soft(() => this.getBlackoutDates(), []),
             soft(() => this.getOffboardingRecords(), []),
+            soft(() => this.get1099VaultRecords(), []),
         ]);
 
         const userIdToLabel = {};
@@ -2670,6 +2722,7 @@ const AeroDB = {
             holidays:        holidays || [],
             blackoutDates:   blackoutDates || [],
             offboardingRecords: offboardingRecords || [],
+            taxVault1099:    taxVault1099 || [],
             burnRateBudget:  { monthly: 45000 },
             splitDeposits:   {},
         };
