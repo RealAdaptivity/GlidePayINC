@@ -459,12 +459,35 @@ const AeroDB = {
     // EMPLOYEES
     // ─────────────────────────────────────────
 
+    /** Auto-seed initial starter team into database for new companies */
+    async seedStarterEmployees(companyId) {
+        const starterEmployees = [
+            { company_id: companyId, name: "Sarah Jenkins", email: "sarah.j@company.com", role: "Software Architect", department: "Engineering", classification: "w2", type: "salaried", rate: 125000, pay_frequency: "biweekly", filing_status: "married", state: "CA", rate_401k: 4, medical_premium: 80, reimbursement: 50 },
+            { company_id: companyId, name: "David Miller", email: "d.miller@company.com", role: "Marketing Lead", department: "Sales & Marketing", classification: "w2", type: "salaried", rate: 84000, pay_frequency: "biweekly", filing_status: "single", state: "NY", rate_401k: 3, medical_premium: 80, reimbursement: 0 },
+            { company_id: companyId, name: "Elena Rostova", email: "e.rostova@company.com", role: "Customer Support Executive", department: "Customer Support", classification: "w2", type: "hourly", rate: 28.50, pay_frequency: "weekly", filing_status: "single", state: "TX", rate_401k: 0, medical_premium: 40, reimbursement: 25 },
+            { company_id: companyId, name: "Marcus Brody", email: "m.brody@company.com", role: "UX Designer (Contractor)", department: "Product Design", classification: "1099", type: "hourly", rate: 45.00, pay_frequency: "biweekly", filing_status: "married", state: "FL", rate_401k: 0, medical_premium: 0, reimbursement: 100 }
+        ];
+        const { data: inserted, error } = await _sb.from('employees').insert(starterEmployees).select();
+        if (error) {
+            console.warn('[AeroDB] seedStarterEmployees notice:', error.message);
+            return [];
+        }
+        return (inserted || []).map(_toAppEmployee);
+    },
+
     /** Return all active employees for the current company. */
     async getEmployees() {
         const rows = _check(
             await _sb.from('employees').select('*').eq('is_active', true).order('name'),
             'getEmployees'
         );
+        if (!rows?.length) {
+            const company = await this.getCompany().catch(() => null);
+            if (company?.id) {
+                return await this.seedStarterEmployees(company.id);
+            }
+            return [];
+        }
         const employees = rows.map(_toAppEmployee);
 
         // Attach garnishments to each employee
