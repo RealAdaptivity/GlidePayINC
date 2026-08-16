@@ -4169,7 +4169,7 @@ function renderApprovalsView(state) {
     return `
         <div class="grid-stats" style="margin-bottom:24px;">
             <div class="card stat-card">
-                <span class="stat-label">Pending Approval</span>
+                <span class="stat-label">Pending Payroll Approvals</span>
                 <span class="stat-value">${pendingCount}</span>
                 <span class="stat-trend" style="color:var(--warning);">${pendingCount > 0 ? 'Action required' : 'All clear'}</span>
             </div>
@@ -4184,6 +4184,22 @@ function renderApprovalsView(state) {
                 <span class="stat-trend up">YTD payroll</span>
             </div>
         </div>
+
+        <!-- 1. Primary: Payroll Runs Pending Approval & History -->
+        <div class="card table-card" style="margin-bottom:24px;">
+            <div class="section-title" style="padding:20px 24px 0 24px; display:flex; justify-content:space-between; align-items:center;">
+                <span>Payroll Approval Runs</span>
+                <span class="badge ${pendingCount > 0 ? 'badge-warning' : 'badge-success'}" style="font-size:11px;">${pendingCount} Pending</span>
+            </div>
+            <div class="table-wrapper">
+                <table class="table-responsive">
+                    <thead><tr><th>Run ID</th><th>Pay Date</th><th>Employees</th><th>Total Payroll</th><th>Submitted By</th><th>Submitted At</th><th>Status</th><th style="text-align:right;">Actions</th></tr></thead>
+                    <tbody>${rows || '<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-tertiary);">No approval records found. Run payroll first to submit a cycle.</td></tr>'}</tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 2. Secondary: Pay Advance Requests -->
         ${(() => {
             const pendingAdvances = advances.filter(a => a.status === 'pending');
             let advanceRows = '';
@@ -4215,7 +4231,7 @@ function renderApprovalsView(state) {
             });
 
             return `
-            <div class="card table-card" style="margin-bottom:24px;">
+            <div class="card table-card">
                 <div class="section-title" style="padding:20px 24px 0 24px; display:flex; justify-content:space-between; align-items:center;">
                     <span>On-Demand Pay Advance Requests</span>
                     <span class="badge badge-warning" style="font-size:11px;">${pendingAdvances.length} Pending</span>
@@ -4239,17 +4255,7 @@ function renderApprovalsView(state) {
                 </div>
             </div>
             `;
-        })()}
-
-        <div class="card table-card">
-            <div class="section-title" style="padding:20px 24px 0 24px;">Payroll Approval History</div>
-            <div class="table-wrapper">
-                <table class="table-responsive">
-                    <thead><tr><th>Run ID</th><th>Pay Date</th><th>Employees</th><th>Amount</th><th>Submitted By</th><th>Submitted At</th><th>Status</th><th></th></tr></thead>
-                    <tbody>${rows || '<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-tertiary);">No approval records</td></tr>'}</tbody>
-                </table>
-            </div>
-        </div>`;
+        })()}`;
 }
 
 // F. Reports & Analytics View
