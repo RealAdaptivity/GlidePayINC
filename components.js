@@ -5705,6 +5705,256 @@ function renderPayGroupsView(state) {
     `;
 }
 
+// V. Compliance Training & LMS
+function renderComplianceTrainingView(state) {
+    const courses = state.trainingCourses || [];
+    let courseCards = '';
+    courses.forEach(c => {
+        const isComplete = c.completedCount >= c.totalCount;
+        courseCards += `
+            <div class="card" style="padding:24px; display:flex; flex-direction:column; justify-content:space-between; border-top:4px solid var(--${isComplete ? 'success' : 'primary'});">
+                <div>
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
+                        <span class="badge badge-info">${escapeHTML(c.category)}</span>
+                        <span style="font-size:12px; color:var(--text-tertiary);">⏱️ ${escapeHTML(c.duration)}</span>
+                    </div>
+                    <h3 style="margin:0 0 8px 0; font-size:16px; font-weight:700;">${escapeHTML(c.title)}</h3>
+                    <p style="font-size:13px; color:var(--text-secondary); margin:0 0 16px 0;">Mandatory compliance training for ${escapeHTML(c.requiredFor)}.</p>
+                </div>
+
+                <div>
+                    <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:6px;">
+                        <span>Progress: <strong>${c.completedCount} / ${c.totalCount} completed</strong></span>
+                        <span>${Math.round((c.completedCount / c.totalCount) * 100)}%</span>
+                    </div>
+                    <div style="height:6px; background:var(--border-color); border-radius:3px; overflow:hidden; margin-bottom:16px;">
+                        <div style="height:100%; width:${(c.completedCount / c.totalCount) * 100}%; background:var(--${isComplete ? 'success' : 'primary'});"></div>
+                    </div>
+                    <button class="btn btn-outline" style="width:100%; font-size:12px;" onclick="AeroApp.openCourseQuizModal('${c.id}')">Start Course &amp; Quiz 🎓</button>
+                </div>
+            </div>
+        `;
+    });
+
+    return `
+        <div class="grid-stats" style="margin-bottom:24px;">
+            <div class="card stat-card">
+                <span class="stat-label">Active Training Modules</span>
+                <span class="stat-value">${courses.length} Courses</span>
+                <span class="stat-trend up">State certified</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">Compliance Pass Rate</span>
+                <span class="stat-value" style="color:var(--success);">94.2%</span>
+                <span class="stat-trend up">CA &amp; NY SB 1343</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">Audit Readiness</span>
+                <span class="stat-value">100% Active</span>
+                <span class="stat-trend up">Certificates logged</span>
+            </div>
+        </div>
+
+        <div class="card" style="padding:24px; margin-bottom:24px; background:linear-gradient(135deg, rgba(79,70,229,0.06), rgba(16,185,129,0.06)); border:1px solid var(--border-color);">
+            <div class="section-title" style="margin-bottom:4px;">Mandatory Compliance Training &amp; LMS</div>
+            <p style="font-size:13px; color:var(--text-secondary); margin:0;">Automate state-mandated harassment prevention, HIPAA, and OSHA training with verifiable certificates.</p>
+        </div>
+
+        <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap:20px;">
+            ${courseCards}
+        </div>
+    `;
+}
+
+// W. Anonymous Pulse Surveys & eNPS Analytics
+function renderPulseSurveysView(state) {
+    const surveys = state.surveys || [];
+    const promoters = surveys.filter(s => s.score >= 9).length;
+    const detractors = surveys.filter(s => s.score <= 6).length;
+    const total = surveys.length || 1;
+    const enps = Math.round(((promoters - detractors) / total) * 100);
+
+    let feedbackCards = '';
+    surveys.forEach(s => {
+        feedbackCards += `
+            <div class="card" style="padding:16px; margin-bottom:12px; border-left:4px solid var(--${s.score >= 9 ? 'success' : (s.score >= 7 ? 'warning' : 'danger')});">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                    <span class="badge badge-${s.score >= 9 ? 'success' : (s.score >= 7 ? 'warning' : 'danger')}">Rating: ${s.score}/10 (${s.category})</span>
+                    <span style="font-size:12px; color:var(--text-tertiary);">${escapeHTML(s.date)}</span>
+                </div>
+                <div style="font-size:13px; line-height:1.5; color:var(--text-primary);">"${escapeHTML(s.feedback)}"</div>
+            </div>
+        `;
+    });
+
+    return `
+        <div class="grid-stats" style="margin-bottom:24px;">
+            <div class="card stat-card">
+                <span class="stat-label">Employee Net Promoter (eNPS)</span>
+                <span class="stat-value" style="color:var(--success);">+${enps}</span>
+                <span class="stat-trend up">World Class Morale</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">Promoters (9-10)</span>
+                <span class="stat-value">${promoters}</span>
+                <span class="stat-trend up">${Math.round((promoters / total) * 100)}% of team</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">Responses Logged</span>
+                <span class="stat-value">${surveys.length}</span>
+                <span class="stat-trend">100% Anonymous</span>
+            </div>
+        </div>
+
+        <div class="card" style="padding:24px; margin-bottom:24px; background:linear-gradient(135deg, rgba(79,70,229,0.06), rgba(14,165,233,0.06)); border:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+            <div>
+                <div class="section-title" style="margin-bottom:4px;">Team Sentiment &amp; Anonymous Pulse Feed</div>
+                <p style="font-size:13px; color:var(--text-secondary); margin:0;">Real-time employee satisfaction metrics, culture feedback, and sentiment scorecards.</p>
+            </div>
+            <button class="btn btn-primary" onclick="AeroApp.openSubmitPulseModal()">+ Submit Anonymous Pulse</button>
+        </div>
+
+        <div class="card table-card">
+            <div class="section-title" style="padding:20px 24px 0 24px;">Recent Team Feedback Feed</div>
+            <div style="padding:20px 24px;">
+                ${feedbackCards || '<div style="text-align:center; padding:40px; color:var(--text-tertiary);">No pulse feedback submitted.</div>'}
+            </div>
+        </div>
+    `;
+}
+
+// X. Company Holiday Calendar & PTO Blackouts
+function renderHolidayCalendarView(state) {
+    const holidays = state.holidays || [];
+    const blackouts = state.blackoutDates || [];
+
+    let holRows = '';
+    holidays.forEach(h => {
+        holRows += `
+            <tr>
+                <td style="font-weight:600;">🎉 ${escapeHTML(h.name)}</td>
+                <td>${escapeHTML(h.date)}</td>
+                <td><span class="badge ${h.type.includes('Federal') ? 'badge-primary' : 'badge-info'}">${escapeHTML(h.type)}</span></td>
+                <td><span class="badge badge-success">Paid Holiday ✓</span></td>
+            </tr>
+        `;
+    });
+
+    let blkRows = '';
+    blackouts.forEach(b => {
+        blkRows += `
+            <tr>
+                <td style="font-weight:600; color:var(--warning);">🔒 ${escapeHTML(b.title)}</td>
+                <td>${escapeHTML(b.startDate)} → ${escapeHTML(b.endDate)}</td>
+                <td>${escapeHTML(b.department)}</td>
+                <td><span class="badge badge-warning">Approval Required</span></td>
+            </tr>
+        `;
+    });
+
+    return `
+        <div class="grid-stats" style="margin-bottom:24px;">
+            <div class="card stat-card">
+                <span class="stat-label">Official Paid Holidays</span>
+                <span class="stat-value">${holidays.length} Days</span>
+                <span class="stat-trend up">Annual calendar</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">PTO Blackout Periods</span>
+                <span class="stat-value">${blackouts.length} Windows</span>
+                <span class="stat-trend" style="color:var(--warning);">Peak business freeze</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">Auto-Timesheet Sync</span>
+                <span class="stat-value" style="color:var(--success);">Active</span>
+                <span class="stat-trend up">Holiday pay credited</span>
+            </div>
+        </div>
+
+        <div class="card table-card" style="margin-bottom:24px;">
+            <div class="section-title" style="padding:20px 24px 0 24px; display:flex; justify-content:space-between; align-items:center;">
+                <span>Official Paid Company Holidays</span>
+                <button class="btn btn-outline" style="font-size:12px;" onclick="AeroApp.promptAddHoliday()">+ Add Custom Holiday</button>
+            </div>
+            <div class="table-wrapper">
+                <table class="table-responsive">
+                    <thead><tr><th>Holiday Name</th><th>Date</th><th>Classification</th><th>Compensation</th></tr></thead>
+                    <tbody>${holRows}</tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card table-card">
+            <div class="section-title" style="padding:20px 24px 0 24px; display:flex; justify-content:space-between; align-items:center;">
+                <span>PTO Blackout Dates (Freeze Windows)</span>
+                <button class="btn btn-outline" style="font-size:12px;" onclick="AeroApp.promptAddBlackout()">+ Add Blackout Window</button>
+            </div>
+            <div class="table-wrapper">
+                <table class="table-responsive">
+                    <thead><tr><th>Event / Freeze Title</th><th>Date Range</th><th>Impacted Group</th><th>Policy Rule</th></tr></thead>
+                    <tbody>${blkRows}</tbody>
+                </table>
+            </div>
+        </div>
+    `;
+}
+
+// Y. Automated Offboarding & COBRA Engine
+function renderOffboardingView(state) {
+    const records = state.offboardingRecords || [];
+    let rows = '';
+    records.forEach(r => {
+        rows += `
+            <tr>
+                <td style="font-weight:600;">${escapeHTML(r.empName)}</td>
+                <td>${escapeHTML(r.separationDate)}</td>
+                <td>${escapeHTML(r.reason)}</td>
+                <td>${r.ptoPayoutHours} hrs (${formatCurrency(r.ptoPayoutAmount)})</td>
+                <td><span class="badge badge-success">COBRA Form Dispatched ✓</span></td>
+                <td><span class="badge badge-info">Cards &amp; Assets Revoked</span></td>
+            </tr>
+        `;
+    });
+
+    return `
+        <div class="grid-stats" style="margin-bottom:24px;">
+            <div class="card stat-card">
+                <span class="stat-label">Processed Offboardings</span>
+                <span class="stat-value">${records.length} Completed</span>
+                <span class="stat-trend up">Full legal audit</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">Accrued PTO Payouts</span>
+                <span class="stat-value">${formatCurrency(records.reduce((s, r) => s + r.ptoPayoutAmount, 0))}</span>
+                <span class="stat-trend">Final checks</span>
+            </div>
+            <div class="card stat-card">
+                <span class="stat-label">COBRA Compliance</span>
+                <span class="stat-value" style="color:var(--success);">100%</span>
+                <span class="stat-trend up">DOL notice compliant</span>
+            </div>
+        </div>
+
+        <div class="card" style="padding:24px; margin-bottom:24px; background:linear-gradient(135deg, rgba(239,68,68,0.06), rgba(79,70,229,0.06)); border:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+            <div>
+                <div class="section-title" style="margin-bottom:4px;">Automated Offboarding &amp; COBRA Continuation</div>
+                <p style="font-size:13px; color:var(--text-secondary); margin:0;">Calculate accrued PTO payouts, revoke IT/spend card credentials, and generate COBRA notices with 1 click.</p>
+            </div>
+            <button class="btn btn-primary" onclick="AeroApp.openOffboardingWizardModal()">+ Initiate Separation</button>
+        </div>
+
+        <div class="card table-card">
+            <div class="section-title" style="padding:20px 24px 0 24px;">Separation &amp; COBRA Audit Log</div>
+            <div class="table-wrapper">
+                <table class="table-responsive">
+                    <thead><tr><th>Employee</th><th>Separation Date</th><th>Reason</th><th>Accrued PTO Payout</th><th>COBRA Notice</th><th>Asset Status</th></tr></thead>
+                    <tbody>${rows || '<tr><td colspan="6" style="text-align:center; padding:40px; color:var(--text-tertiary);">No employee separations recorded.</td></tr>'}</tbody>
+                </table>
+            </div>
+        </div>
+    `;
+}
+
 // Export UI Renderers
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
@@ -5757,9 +6007,14 @@ if (typeof module !== 'undefined' && module.exports) {
         renderITAssetsView,
         renderStateRetirementView,
         renderRunwaySimulatorView,
-        renderPayGroupsView
+        renderPayGroupsView,
+        renderComplianceTrainingView,
+        renderPulseSurveysView,
+        renderHolidayCalendarView,
+        renderOffboardingView
     };
 }
+
 
 
 

@@ -2268,6 +2268,179 @@ const AeroDB = {
     },
 
     // ─────────────────────────────────────────
+    // 16. COMPLIANCE TRAINING & LMS
+    // ─────────────────────────────────────────
+    _localTrainingCourses: [
+        {
+            id: 'course-1',
+            title: 'California Harassment Prevention (SB 1343)',
+            category: 'State Compliance',
+            duration: '60 mins',
+            state: 'CA',
+            completedCount: 3,
+            totalCount: 4,
+            requiredFor: 'All California Workers'
+        },
+        {
+            id: 'course-2',
+            title: 'New York State Sexual Harassment Prevention',
+            category: 'State Compliance',
+            duration: '60 mins',
+            state: 'NY',
+            completedCount: 2,
+            totalCount: 2,
+            requiredFor: 'All New York Workers'
+        },
+        {
+            id: 'course-3',
+            title: 'HIPAA & Data Privacy Essentials 2026',
+            category: 'Security & Privacy',
+            duration: '45 mins',
+            state: 'Federal',
+            completedCount: 4,
+            totalCount: 4,
+            requiredFor: 'All Active Personnel'
+        },
+        {
+            id: 'course-4',
+            title: 'OSHA Workplace Safety & Hazard Communication',
+            category: 'Workplace Safety',
+            duration: '30 mins',
+            state: 'Federal',
+            completedCount: 3,
+            totalCount: 4,
+            requiredFor: 'All Employees'
+        }
+    ],
+
+    async getTrainingCourses() {
+        return this._localTrainingCourses;
+    },
+
+    async completeCourse(empId, courseId) {
+        const course = this._localTrainingCourses.find(c => c.id === courseId);
+        if (course) {
+            course.completedCount = Math.min(course.totalCount, course.completedCount + 1);
+            try {
+                await this.addAuditLog('Compliance Training Completed', `Employee ${empId} completed ${course.title}`, 'compliance');
+            } catch (_) {}
+        }
+        return course;
+    },
+
+    // ─────────────────────────────────────────
+    // 17. ANONYMOUS PULSE SURVEYS & ENPS
+    // ─────────────────────────────────────────
+    _localSurveys: [
+        { id: 's-1', score: 10, category: 'Promoter', feedback: 'Amazing culture, great benefits, and smooth bi-weekly payroll direct deposits.', date: '2026-08-01' },
+        { id: 's-2', score: 9, category: 'Promoter', feedback: 'Love the on-demand pay advance and mobile time clock features!', date: '2026-08-05' },
+        { id: 's-3', score: 8, category: 'Passive', feedback: 'Good overall, would love more options in the 401(k) fund lineup.', date: '2026-08-10' },
+        { id: 's-4', score: 10, category: 'Promoter', feedback: 'Best HR interface I have ever used across my engineering career.', date: '2026-08-12' }
+    ],
+
+    async getPulseSurveys() {
+        return this._localSurveys;
+    },
+
+    async submitPulseSurvey(score, feedback) {
+        const num = parseInt(score) || 10;
+        let category = 'Promoter';
+        if (num <= 6) category = 'Detractor';
+        else if (num <= 8) category = 'Passive';
+
+        const survey = {
+            id: 's_' + Date.now(),
+            score: num,
+            category: category,
+            feedback: feedback || 'No written comments provided.',
+            date: new Date().toISOString().slice(0, 10)
+        };
+        this._localSurveys.unshift(survey);
+        return survey;
+    },
+
+    // ─────────────────────────────────────────
+    // 18. HOLIDAY CALENDAR & PTO BLACKOUTS
+    // ─────────────────────────────────────────
+    _localHolidays: [
+        { name: 'Labor Day', date: '2026-09-07', type: 'Federal Paid' },
+        { name: 'Indigenous Peoples / Columbus Day', date: '2026-10-12', type: 'Federal Paid' },
+        { name: 'Veterans Day', date: '2026-11-11', type: 'Federal Paid' },
+        { name: 'Thanksgiving Day', date: '2026-11-26', type: 'Federal Paid' },
+        { name: 'Day After Thanksgiving', date: '2026-11-27', type: 'Company Floating' },
+        { name: 'Christmas Eve & Day', date: '2026-12-24', type: 'Federal Paid' },
+        { name: 'New Year\'s Day', date: '2027-01-01', type: 'Federal Paid' }
+    ],
+
+    _localBlackoutDates: [
+        { title: 'Q4 Black Friday Release Freeze', startDate: '2026-11-23', endDate: '2026-11-30', department: 'All Operations' },
+        { title: 'Annual Tax Year-End Closeout', startDate: '2026-12-28', endDate: '2027-01-05', department: 'Finance & HR' }
+    ],
+
+    async getHolidays() {
+        return this._localHolidays;
+    },
+
+    async saveHoliday(h) {
+        this._localHolidays.push(h);
+        return h;
+    },
+
+    async getBlackoutDates() {
+        return this._localBlackoutDates;
+    },
+
+    async saveBlackoutDate(b) {
+        this._localBlackoutDates.push(b);
+        return b;
+    },
+
+    // ─────────────────────────────────────────
+    // 19. AUTOMATED OFFBOARDING & COBRA
+    // ─────────────────────────────────────────
+    _localOffboardingRecords: [
+        {
+            id: 'off-1',
+            empId: 'emp-99',
+            empName: 'David Zhang',
+            separationDate: '2026-07-31',
+            reason: 'Voluntary Resignation',
+            ptoPayoutHours: 42,
+            ptoPayoutAmount: 2520.00,
+            cobraNoticeGenerated: true,
+            assetsRecovered: true
+        }
+    ],
+
+    async getOffboardingRecords() {
+        return this._localOffboardingRecords;
+    },
+
+    async executeOffboarding(data) {
+        const emp = (await this.getEmployees()).find(e => e.id === data.empId);
+        const rate = emp?.rate || 35;
+        const ptoHours = (await this.getPTOBalances())[data.empId]?.vacation || 20;
+        const ptoPayout = emp?.type === 'salaried' ? (rate / 2080 * ptoHours) : (rate * ptoHours);
+
+        const rec = {
+            id: 'off_' + Date.now(),
+            empId: data.empId,
+            empName: emp ? emp.name : 'Employee',
+            separationDate: data.separationDate || new Date().toISOString().slice(0, 10),
+            reason: data.reason || 'Separation of Employment',
+            ptoPayoutHours: ptoHours,
+            ptoPayoutAmount: ptoPayout,
+            cobraNoticeGenerated: true,
+            assetsRecovered: true
+        };
+        this._localOffboardingRecords.unshift(rec);
+        try {
+            await this.addAuditLog('Offboarding Completed', `Processed offboarding & COBRA notice for ${rec.empName}`, 'hr');
+        } catch (_) {}
+        return rec;
+    },
+
+    // ─────────────────────────────────────────
     // FULL STATE LOADER
     // ─────────────────────────────────────────
 
@@ -2328,6 +2501,11 @@ const AeroDB = {
             itAssets,
             retirementEnrollments,
             payGroups,
+            trainingCourses,
+            surveys,
+            holidays,
+            blackoutDates,
+            offboardingRecords,
         ] = await Promise.all([
             soft(() => this.getEmployees(), []),
             soft(() => this.getPayrollHistory(), []),
@@ -2360,6 +2538,11 @@ const AeroDB = {
             soft(() => this.getITAssets(), []),
             soft(() => this.getStateRetirementStatus(), {}),
             soft(() => this.getPayGroups(), []),
+            soft(() => this.getTrainingCourses(), []),
+            soft(() => this.getPulseSurveys(), []),
+            soft(() => this.getHolidays(), []),
+            soft(() => this.getBlackoutDates(), []),
+            soft(() => this.getOffboardingRecords(), []),
         ]);
 
         const userIdToLabel = {};
@@ -2428,6 +2611,11 @@ const AeroDB = {
             itAssets:        itAssets || [],
             retirementEnrollments: retirementEnrollments || {},
             payGroups:       payGroups || [],
+            trainingCourses: trainingCourses || [],
+            surveys:         surveys || [],
+            holidays:        holidays || [],
+            blackoutDates:   blackoutDates || [],
+            offboardingRecords: offboardingRecords || [],
             burnRateBudget:  { monthly: 45000 },
             splitDeposits:   {},
         };
