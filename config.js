@@ -44,11 +44,11 @@ function escapeAttr(value) {
 const AeroConfig = typeof location !== "undefined" ? (() => {
 
     // ── Sandbox (test-mode) config ────────────────────────────────────────────
-    // GlidePay Test sandbox — acct_1TkoXCAsgAzfeB6D
+    // GlidePay Test sandbox — acct_1TkoX1PRpbEk768f
     const SANDBOX = {
-        stripePublishableKey: "pk_test_51TkoXCAsgAzfeB6D4ktKPKED969ZbEemhjEfXoEybDqh45GFfm5Oflziwkc4QLwfc1IaTNvCojYBqNpRrIMz2Mck00uHoKZHlZ",
-        priceBaseId:          "price_1TzIdaAsgAzfeB6DKeordaY7",
-        priceSeatId:          "price_1TzIdbAsgAzfeB6D0GyWkgXK",
+        stripePublishableKey: "pk_test_51TkoX1PRpbEk768feMSeb421QiukgyWZWnCZYDWWL2JfITA2u3avgXpxJg04QqKz30ahNJo1DUOKPfbMxNhCNx4V006xpYCW68",
+        priceBaseId:          "price_1U4rgjPRpbEk768foydvNiUB",
+        priceSeatId:          "price_1U4rgnPRpbEk768fM4vBzhV2",
         trialDays:            14,
         supabaseUrl:          "https://ojvnxnlrghatkwjrlnop.supabase.co",
         // Edge functions are the same URL; secrets on the Supabase side switch

@@ -559,6 +559,38 @@ const AeroDB = {
         );
     },
 
+    /** Record NACHA electronic authorization consent. */
+    async recordACHAuthorization({ companyId, employeeId, last4, routing, consentText, signerName }) {
+        const user = await this.getUser();
+        const { data: comp } = await _sb.from('employees').select('company_id').eq('id', employeeId).maybeSingle();
+        const finalCompanyId = companyId || comp?.company_id;
+        if (!finalCompanyId) return null;
+
+        const { data, error } = await _sb.from('ach_authorizations').insert({
+            company_id: finalCompanyId,
+            employee_id: employeeId,
+            user_id: user?.id || null,
+            bank_account_last4: last4,
+            bank_routing: routing || null,
+            agreement_version: '2026-v1',
+            consent_text: consentText || 'I authorize direct deposit ACH payments to my designated bank account.',
+            signer_name: signerName || user?.email || 'Employee',
+            user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null,
+        }).select().maybeSingle();
+
+        if (error) console.warn('[AeroDB] recordACHAuthorization:', error.message);
+        return data;
+    },
+
+    /** Get ACH authorizations for employee or company. */
+    async getACHAuthorizations(employeeId) {
+        let query = _sb.from('ach_authorizations').select('*').order('created_at', { ascending: false });
+        if (employeeId) query = query.eq('employee_id', employeeId);
+        const { data, error } = await query;
+        if (error) console.warn('[AeroDB] getACHAuthorizations:', error.message);
+        return data || [];
+    },
+
     /** Return ACH transfer rows for a payroll run. */
     async getAchTransfers(payrollRunId) {
         const { data, error } = await _sb

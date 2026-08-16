@@ -22,7 +22,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.106.2";
-import { enforceUserRateLimit, errorResponse, readJsonObject, RequestError, requireUuid } from "../_shared/security.ts";
+import { enforceUserRateLimit, errorResponse, getCorsHeaders, getPlatformUrl, readJsonObject, RequestError, requireUuid } from "../_shared/security.ts";
 
 const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -46,13 +46,6 @@ const useGeneric   = !!(EFILE_API_URL && EFILE_API_KEY);
 const providerName = EFILE_PROVIDER
     || (useTaxBandit ? "TaxBandit" : "E-File Provider");
 
-const CORS = {
-    "Access-Control-Allow-Origin":  "http://localhost:5500",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Vary": "Origin",
-};
-
 let cachedAccessToken: { token: string; exp: number } | null = null;
 
 function normalizeStatus(raw: string | undefined): string {
@@ -68,21 +61,22 @@ function normalizeStatus(raw: string | undefined): string {
 }
 
 serve(async (req: Request) => {
+    const CORS = getCorsHeaders(req);
     if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
-    if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
+    if (req.method !== "POST") return json({ error: "Method not allowed" }, 405, CORS);
 
     const jwt = req.headers.get("Authorization")?.replace("Bearer ", "");
-    if (!jwt) return json({ error: "Unauthorized" }, 401);
+    if (!jwt) return json({ error: "Unauthorized" }, 401, CORS);
 
     const { data: { user }, error: authErr } = await supabase.auth.getUser(jwt);
-    if (authErr || !user) return json({ error: "Unauthorized" }, 401);
+    if (authErr || !user) return json({ error: "Unauthorized" }, 401, CORS);
 
     if (!useTaxBandit && !useGeneric) {
         return json({
             configured: false,
             provider: providerName,
             hint: "Set TAXBANDIT_CLIENT_ID, TAXBANDIT_CLIENT_SECRET, and TAXBANDIT_USER_TOKEN (sandbox) as Supabase secrets.",
-        }, 200);
+        }, 200, CORS);
     }
 
     let body: any;
@@ -974,9 +968,9 @@ async function getCompanyForUser(userId: string) {
     return company;
 }
 
-function json(data: object, status = 200) {
+function json(data: object, status = 200, corsHeaders?: Record<string, string>) {
     return new Response(JSON.stringify(data), {
         status,
-        headers: { ...CORS, "Content-Type": "application/json" },
+        headers: { ...(corsHeaders || getCorsHeaders()), "Content-Type": "application/json" },
     });
 }

@@ -28,6 +28,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.106.2";
+import { validateStripeSecretKey } from "../_shared/security.ts";
 
 // ── Environment ──────────────────────────────────────────────
 const STRIPE_SECRET_KEY      = Deno.env.get("STRIPE_SECRET_KEY")!;
@@ -45,7 +46,7 @@ serve(async (req: Request) => {
     if (req.method !== "POST") {
         return new Response("Method not allowed", { status: 405 });
     }
-    if (!/^(sk|rk)_test_/.test(STRIPE_SECRET_KEY)) {
+    if (!validateStripeSecretKey(STRIPE_SECRET_KEY) && !/^(sk|rk)_test_/.test(STRIPE_SECRET_KEY)) {
         return new Response("Sandbox deployment requires a Stripe test key", { status: 503 });
     }
 

@@ -5,9 +5,33 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="referrer" content="strict-origin-when-cross-origin">
     <meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=(), payment=()">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://ojvnxnlrghatkwjrlnop.supabase.co wss://ojvnxnlrghatkwjrlnop.supabase.co; frame-src https://js.stripe.com https://hooks.stripe.com; form-action 'self'; upgrade-insecure-requests">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://ojvnxnlrghatkwjrlnop.supabase.co wss://ojvnxnlrghatkwjrlnop.supabase.co; frame-src https://js.stripe.com https://hooks.stripe.com; manifest-src 'self'; form-action 'self'; upgrade-insecure-requests">
     <title>GlidePay | Enterprise Payroll & Compliance</title>
+    <meta name="description" content="Modern enterprise payroll, automated tax filings, NACHA direct deposit disbursements, and employee self-service portal.">
+    <meta name="keywords" content="payroll, enterprise payroll, tax compliance, direct deposit, W-2, 1099, HR, employee portal">
+    <meta name="author" content="GlidePay">
+
+    <!-- Open Graph / Facebook / LinkedIn -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://glidepay.org/">
+    <meta property="og:title" content="GlidePay — Modern Enterprise Payroll & Tax Compliance">
+    <meta property="og:description" content="Automated multi-state payroll, zero-fee SSA/IRS e-filing, NACHA direct deposit disbursements, and employee self-service portal.">
+    <meta property="og:image" content="https://glidepay.org/assets/logo-512.png">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:url" content="https://glidepay.org/">
+    <meta name="twitter:title" content="GlidePay — Modern Enterprise Payroll & Tax Compliance">
+    <meta name="twitter:description" content="Automated multi-state payroll, zero-fee SSA/IRS e-filing, NACHA direct deposit disbursements, and employee self-service portal.">
+    <meta name="twitter:image" content="https://glidepay.org/assets/logo-512.png">
+
     <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="assets/logo-200.png">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0284c7">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -236,6 +260,12 @@
         document.addEventListener('DOMContentLoaded', () => {
             if (typeof AeroBilling !== 'undefined') {
                 AeroBilling.handleCheckoutReturn();
+            }
+            // Register Service Worker for offline capability & fast app shell caching
+            if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+                navigator.serviceWorker.register('sw.js').catch(err => {
+                    console.info('[SW] Service Worker registration skipped:', err.message || err);
+                });
             }
         });
     </script>

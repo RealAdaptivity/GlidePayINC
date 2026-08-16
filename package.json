@@ -13,5 +13,9 @@
   },
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "@supabase/cli-windows-x64": "^2.114.0",
+    "supabase": "^2.114.0"
   }
 }

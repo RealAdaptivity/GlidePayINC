@@ -41,6 +41,48 @@ export class RequestError extends Error {
     constructor(message: string, public status: number) { super(message); }
 }
 
+export function getCorsHeaders(req?: Request): Record<string, string> {
+    const origin = req ? (req.headers.get("origin") || "") : "";
+    const configuredOrigin = Deno.env.get("CORS_ALLOWED_ORIGIN") || "";
+    const configuredPlatform = Deno.env.get("PLATFORM_URL") || "";
+
+    const allowedOrigins = new Set([
+        "http://localhost:5500",
+        "http://127.0.0.1:5500",
+        "http://localhost:3000",
+        "https://glidepay.org",
+        ...(configuredOrigin ? [configuredOrigin.replace(/\/$/, "")] : []),
+        ...(configuredPlatform ? [configuredPlatform.replace(/\/$/, "")] : []),
+    ]);
+
+    const resolvedOrigin = allowedOrigins.has(origin)
+        ? origin
+        : (configuredOrigin || (Deno.env.get("ENVIRONMENT") === "production" ? "https://glidepay.org" : "http://localhost:5500"));
+
+    return {
+        "Access-Control-Allow-Origin": resolvedOrigin,
+        "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Vary": "Origin",
+    };
+}
+
+export function getPlatformUrl(): string {
+    const envUrl = Deno.env.get("PLATFORM_URL");
+    if (envUrl && envUrl.trim()) return envUrl.replace(/\/$/, "");
+    return Deno.env.get("ENVIRONMENT") === "production"
+        ? "https://glidepay.org"
+        : "http://localhost:5500";
+}
+
+export function validateStripeSecretKey(secretKey: string): boolean {
+    const isProduction = Deno.env.get("ENVIRONMENT") === "production" || Deno.env.get("PLATFORM_URL")?.includes("glidepay.org");
+    if (isProduction) {
+        return /^(sk|rk)_(test|live)_/.test(secretKey);
+    }
+    return /^(sk|rk)_test_/.test(secretKey);
+}
+
 export function errorResponse(err: unknown, cors: Record<string, string>, context: string): Response {
     const requestId = crypto.randomUUID();
     if (err instanceof RequestError) {

@@ -3048,16 +3048,33 @@ const AeroApp = {
             : getPaystubHTML(employee, results, dateRange);
         
         const fullContent = `
-            <div style="display:flex; justify-content:flex-end; margin-bottom:12px;" class="no-print">
-                <button class="btn btn-outline" onclick="window.print()">
-                    <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7h-1V4a1 1 0 00-1-1H7a1 1 0 00-1 1v3H5a2 2 0 00-2 2v6a2 2 0 002 2h2v3a1 1 0 001 1h8a1 1 0 001-1v-3h2a2 2 0 002-2V9a2 2 0 00-2-2zM7 5h10v2H7V5zm10 14H7v-4h10v4z"></path></svg>
-                    Print Statement
+            <div style="display:flex; justify-content:flex-end; gap:8px; margin-bottom:12px;" class="no-print">
+                <button class="btn btn-primary" onclick="AeroApp.printPayStubDirect('${employeeId}', '${runId}')">
+                    <svg style="width:16px;height:16px;margin-right:6px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+                    Print / Download PDF
                 </button>
             </div>
             ${stubHTML}
         `;
         
         this.openModal(`${is1099 ? 'Contractor Receipt' : 'Pay Stub Statement'}: ${employee.name}`, fullContent, true);
+    },
+
+    printPayStubDirect: function(employeeId, runId) {
+        const run = this.state.payrollHistory.find(r => r.id === runId);
+        if (!run || !run.details[employeeId]) {
+            this.showToast("Paystub statement details not found.", "danger");
+            return;
+        }
+        const employee = this.state.employees.find(e => e.id === employeeId);
+        const results = run.details[employeeId];
+        const company = this.state.settings || {};
+        const ytd = typeof aggregateEmployeeYearTotals === 'function' ? aggregateEmployeeYearTotals(this.state, employeeId) : {};
+        if (typeof printPayStub === 'function') {
+            printPayStub({ company, employee, run, details: results, ytd });
+        } else {
+            window.print();
+        }
     },
 
     generateEmployeeW2: function() {
@@ -3377,6 +3394,16 @@ const AeroApp = {
             });
             if (!confirmResp.ok) throw new Error('Failed to save bank account');
             const { last4, routing } = await confirmResp.json();
+
+            // Record NACHA electronic direct deposit consent for regulatory audit compliance
+            await AeroDB.recordACHAuthorization({
+                companyId: emp.companyId || (this.state.settings && this.state.settings.id),
+                employeeId: employeeId,
+                last4: last4,
+                routing: routing,
+                consentText: `I, ${emp.name}, authorize GlidePay and my employer to initiate electronic credit entries (and debit adjustments if necessary) to my bank account ending in ••••${last4}.`,
+                signerName: emp.name,
+            }).catch(e => console.warn('[ACH] Authorization consent record skipped:', e.message));
 
             // Update local state so the UI reflects the new bank account without a full reload
             const idx = this.state.employees.indexOf(emp);

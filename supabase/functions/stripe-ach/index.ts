@@ -17,7 +17,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@14.21.0?target=deno";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.106.2";
-import { enforceUserRateLimit, errorResponse, readJsonObject, RequestError, requireUuid } from "../_shared/security.ts";
+import { enforceUserRateLimit, errorResponse, getCorsHeaders, getPlatformUrl, readJsonObject, RequestError, requireUuid, validateStripeSecretKey } from "../_shared/security.ts";
 
 const STRIPE_SECRET_KEY = Deno.env.get("STRIPE_SECRET_KEY") ?? "";
 const stripe   = new Stripe(STRIPE_SECRET_KEY, { apiVersion: "2024-06-20" });
@@ -28,22 +28,16 @@ const supabase = createClient(
 
 const RESEND_API_KEY  = Deno.env.get("RESEND_API_KEY") ?? "";
 const PLATFORM_FROM   = Deno.env.get("PLATFORM_FROM_EMAIL") ?? "payroll@glidepay.org";
-const PLATFORM_URL    = "http://localhost:5500";
+const PLATFORM_URL    = getPlatformUrl();
 
 const HOLD_BUSINESS_DAYS = 3;
 
-const CORS = {
-    "Access-Control-Allow-Origin":  "http://localhost:5500",
-    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Vary": "Origin",
-};
-
 serve(async (req: Request) => {
-    if (req.method === "OPTIONS") return ok();
-    if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
-    if (!/^(sk|rk)_test_/.test(STRIPE_SECRET_KEY)) {
-        return json({ error: "Sandbox deployment requires a Stripe test key" }, 503);
+    const CORS = getCorsHeaders(req);
+    if (req.method === "OPTIONS") return ok(CORS);
+    if (req.method !== "POST") return json({ error: "Method not allowed" }, 405, CORS);
+    if (!validateStripeSecretKey(STRIPE_SECRET_KEY) && !/^(sk|rk)_test_/.test(STRIPE_SECRET_KEY)) {
+        return json({ error: "Sandbox deployment requires a Stripe test key" }, 503, CORS);
     }
 
     const jwt = req.headers.get("Authorization")?.replace("Bearer ", "");
@@ -605,13 +599,13 @@ async function sendEmail(opts: { to: string; subject: string; html: string }) {
     }
 }
 
-function json(data: object, status = 200) {
+function json(data: object, status = 200, corsHeaders?: Record<string, string>) {
     return new Response(JSON.stringify(data), {
         status,
-        headers: { ...CORS, "Content-Type": "application/json" },
+        headers: { ...(corsHeaders || getCorsHeaders()), "Content-Type": "application/json" },
     });
 }
 
-function ok() {
-    return new Response("ok", { headers: CORS });
+function ok(corsHeaders?: Record<string, string>) {
+    return new Response("ok", { headers: corsHeaders || getCorsHeaders() });
 }

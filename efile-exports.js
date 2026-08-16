@@ -263,10 +263,236 @@ function generate1099IRISCSV(state, year) {
     return rows.join('\r\n') + '\r\n';
 }
 
+// ── Pay Stub & Tax Statement Generators ──────────────────────────────────────
+
+function _fmtCurr(val) {
+    const num = Number(val) || 0;
+    return '$' + num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function _esc(str) {
+    return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+/**
+ * Generate clean, printable, professional HTML for an employee pay stub.
+ */
+function generatePayStubHTML(opts) {
+    const { company = {}, employee = {}, run = {}, details = {}, ytd = {} } = opts;
+    const gross = details.grossPay || details.gross || 0;
+    const net = details.netPay || details.net || 0;
+    const taxes = details.taxes || {};
+    const preTax = details.preTaxDeductions || (details.deductions?.medical401k) || 0;
+    const postTax = details.postTaxDeductions || 0;
+    const reimbursement = details.reimbursement || 0;
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Pay Stub - ${_esc(employee.name || 'Employee')} - ${_esc(run.periodEnd || run.date || '')}</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        body { background: #f8fafc; color: #1e293b; padding: 24px; }
+        .stub-card { max-width: 800px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 32px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+        .header { display: flex; justify-content: space-between; border-bottom: 2px solid #0284c7; padding-bottom: 16px; margin-bottom: 20px; }
+        .company-name { font-size: 22px; font-weight: 700; color: #0f172a; }
+        .company-sub { font-size: 12px; color: #64748b; margin-top: 4px; }
+        .stub-badge { background: #e0f2fe; color: #0369a1; font-weight: 600; font-size: 12px; padding: 4px 10px; border-radius: 12px; align-self: flex-start; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; font-size: 13px; }
+        .info-block { background: #f8fafc; padding: 12px 16px; border-radius: 6px; border: 1px solid #f1f5f9; }
+        .info-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+        .info-label { color: #64748b; }
+        .info-val { font-weight: 600; color: #334155; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px; }
+        th { background: #f1f5f9; color: #475569; text-align: left; padding: 8px 12px; font-weight: 600; border-bottom: 1px solid #cbd5e1; }
+        td { padding: 8px 12px; border-bottom: 1px solid #f1f5f9; }
+        .text-right { text-align: right; }
+        .summary-box { background: #0f172a; color: #ffffff; padding: 16px 20px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
+        .summary-label { font-size: 14px; opacity: 0.8; }
+        .summary-amount { font-size: 24px; font-weight: 700; color: #38bdf8; }
+        .footer-note { font-size: 11px; color: #94a3b8; text-align: center; margin-top: 24px; }
+        @media print {
+            body { background: #ffffff; padding: 0; }
+            .stub-card { border: none; box-shadow: none; padding: 0; }
+            .no-print { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="stub-card">
+        <div class="header">
+            <div>
+                <div class="company-name">${_esc(company.name || 'GlidePay Employer')}</div>
+                <div class="company-sub">EIN: ${_esc(company.ein || '••-•••••••')} | Payroll Earnings Statement</div>
+            </div>
+            <div class="stub-badge">OFFICIAL PAY STUB</div>
+        </div>
+
+        <div class="grid-2">
+            <div class="info-block">
+                <div class="info-row"><span class="info-label">Employee:</span><span class="info-val">${_esc(employee.name || 'Employee')}</span></div>
+                <div class="info-row"><span class="info-label">Role:</span><span class="info-val">${_esc(employee.role || employee.department || 'Staff')}</span></div>
+                <div class="info-row"><span class="info-label">Classification:</span><span class="info-val">${_esc(employee.classification || 'W-2')} (${_esc(employee.type || 'Salary')})</span></div>
+                <div class="info-row"><span class="info-label">State:</span><span class="info-val">${_esc(employee.state || 'US')}</span></div>
+            </div>
+            <div class="info-block">
+                <div class="info-row"><span class="info-label">Pay Period:</span><span class="info-val">${_esc(run.periodStart || '—')} to ${_esc(run.periodEnd || '—')}</span></div>
+                <div class="info-row"><span class="info-label">Pay Date:</span><span class="info-val">${_esc(run.date || new Date().toISOString().slice(0, 10))}</span></div>
+                <div class="info-row"><span class="info-label">Pay Frequency:</span><span class="info-val">${_esc(employee.payFrequency || 'Biweekly')}</span></div>
+                <div class="info-row"><span class="info-label">Direct Deposit:</span><span class="info-val">••••${_esc(employee.bankLast4 || employee.bank_account_last4 || 'Direct Deposit')}</span></div>
+            </div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Earnings Breakdown</th>
+                    <th class="text-right">Rate</th>
+                    <th class="text-right">Hours</th>
+                    <th class="text-right">Current Amount</th>
+                    <th class="text-right">YTD Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Regular Earnings</td>
+                    <td class="text-right">${_fmtCurr(details.rate || employee.rate || 0)}</td>
+                    <td class="text-right">${details.hours ? details.hours.toFixed(1) : '—'}</td>
+                    <td class="text-right">${_fmtCurr(gross)}</td>
+                    <td class="text-right">${_fmtCurr(ytd.gross || gross)}</td>
+                </tr>
+                ${reimbursement > 0 ? `<tr>
+                    <td>Expense Reimbursement (Non-taxable)</td>
+                    <td class="text-right">—</td>
+                    <td class="text-right">—</td>
+                    <td class="text-right">${_fmtCurr(reimbursement)}</td>
+                    <td class="text-right">${_fmtCurr(reimbursement)}</td>
+                </tr>` : ''}
+            </tbody>
+        </table>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Tax Deductions (Employee)</th>
+                    <th class="text-right">Current</th>
+                    <th class="text-right">YTD</th>
+                    <th>Other Deductions</th>
+                    <th class="text-right">Current</th>
+                    <th class="text-right">YTD</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Federal Income Tax (FIT)</td>
+                    <td class="text-right">${_fmtCurr(taxes.federalIncomeTax || 0)}</td>
+                    <td class="text-right">${_fmtCurr(ytd.fit || taxes.federalIncomeTax || 0)}</td>
+                    <td>Pre-Tax Deductions (401k / Health)</td>
+                    <td class="text-right">${_fmtCurr(preTax)}</td>
+                    <td class="text-right">${_fmtCurr(ytd.preTax || preTax)}</td>
+                </tr>
+                <tr>
+                    <td>Social Security (6.2%)</td>
+                    <td class="text-right">${_fmtCurr(taxes.socialSecurity || 0)}</td>
+                    <td class="text-right">${_fmtCurr(ytd.ss || taxes.socialSecurity || 0)}</td>
+                    <td>Post-Tax Deductions / Garnishment</td>
+                    <td class="text-right">${_fmtCurr(postTax)}</td>
+                    <td class="text-right">${_fmtCurr(ytd.postTax || postTax)}</td>
+                </tr>
+                <tr>
+                    <td>Medicare (1.45%)</td>
+                    <td class="text-right">${_fmtCurr(taxes.medicare || 0)}</td>
+                    <td class="text-right">${_fmtCurr(ytd.med || taxes.medicare || 0)}</td>
+                    <td>Total Deductions</td>
+                    <td class="text-right">${_fmtCurr(preTax + postTax)}</td>
+                    <td class="text-right">${_fmtCurr((ytd.preTax || preTax) + (ytd.postTax || postTax))}</td>
+                </tr>
+                <tr>
+                    <td>State Income Tax (SIT - ${_esc(employee.state || '')})</td>
+                    <td class="text-right">${_fmtCurr(taxes.stateIncomeTax || 0)}</td>
+                    <td class="text-right">${_fmtCurr(ytd.sit || taxes.stateIncomeTax || 0)}</td>
+                    <td colspan="3"></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="summary-box">
+            <div>
+                <div class="summary-label">NET TAKE-HOME PAY</div>
+                <div style="font-size:12px;opacity:0.8;margin-top:2px;">Disbursed via Direct Deposit (ACH)</div>
+            </div>
+            <div class="summary-amount">${_fmtCurr(net)}</div>
+        </div>
+
+        <div class="footer-note">
+            Generated by GlidePay Payroll & Compliance Platform. Retain this statement for your tax records.
+        </div>
+    </div>
+</body>
+</html>`;
+}
+
+/**
+ * Trigger browser print dialog with the rendered pay stub.
+ */
+function printPayStub(opts) {
+    const html = generatePayStubHTML(opts);
+    const printWindow = window.open('', '_blank', 'width=850,height=900');
+    if (!printWindow) {
+        alert('Please allow popups to print pay stubs.');
+        return;
+    }
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+        printWindow.print();
+    }, 250);
+}
+
+/**
+ * Generate standard Form W-2 / 1099 Preview summary modal HTML.
+ */
+function generateW2SummaryHTML(employee, yearTotals, company, year) {
+    year = year || new Date().getFullYear();
+    const t = yearTotals || {};
+    return `<div style="font-size:13px; color:#1e293b;">
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #e2e8f0; padding-bottom:12px; margin-bottom:16px;">
+            <div>
+                <h4 style="font-size:16px; font-weight:700; color:#0f172a; margin:0;">Form W-2 Wage & Tax Statement (${year})</h4>
+                <div style="font-size:12px; color:#64748b;">${_esc(company.name || 'Company')} — EIN: ${_esc(company.ein || '••-•••••••')}</div>
+            </div>
+            <span style="background:#e0f2fe; color:#0369a1; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:600;">EMPLOYEE COPY</span>
+        </div>
+        <div style="background:#f8fafc; padding:10px 12px; border-radius:6px; margin-bottom:14px;">
+            <strong>Employee:</strong> ${_esc(employee.name)} | <strong>SSN:</strong> •••-••-${_esc(employee.bankLast4 || '••••')} | <strong>State:</strong> ${_esc(employee.state || 'US')}
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+            <div style="border:1px solid #e2e8f0; padding:8px 10px; border-radius:4px;"><span style="color:#64748b; font-size:11px;">1. Wages, tips, other comp:</span><br><strong>${_fmtCurr(t.box1 ?? t.gross)}</strong></div>
+            <div style="border:1px solid #e2e8f0; padding:8px 10px; border-radius:4px;"><span style="color:#64748b; font-size:11px;">2. Federal income tax withheld:</span><br><strong>${_fmtCurr(t.box2 ?? t.fit)}</strong></div>
+            <div style="border:1px solid #e2e8f0; padding:8px 10px; border-radius:4px;"><span style="color:#64748b; font-size:11px;">3. Social Security wages:</span><br><strong>${_fmtCurr(t.box3 ?? t.ssWages)}</strong></div>
+            <div style="border:1px solid #e2e8f0; padding:8px 10px; border-radius:4px;"><span style="color:#64748b; font-size:11px;">4. Social Security tax withheld:</span><br><strong>${_fmtCurr(t.box4 ?? t.ss)}</strong></div>
+            <div style="border:1px solid #e2e8f0; padding:8px 10px; border-radius:4px;"><span style="color:#64748b; font-size:11px;">5. Medicare wages and tips:</span><br><strong>${_fmtCurr(t.box5 ?? t.medWages)}</strong></div>
+            <div style="border:1px solid #e2e8f0; padding:8px 10px; border-radius:4px;"><span style="color:#64748b; font-size:11px;">6. Medicare tax withheld:</span><br><strong>${_fmtCurr(t.box6 ?? t.med)}</strong></div>
+            <div style="border:1px solid #e2e8f0; padding:8px 10px; border-radius:4px;"><span style="color:#64748b; font-size:11px;">12. Deferred Compensation (401k):</span><br><strong>${_fmtCurr(t.def ?? t.retirement)}</strong></div>
+            <div style="border:1px solid #e2e8f0; padding:8px 10px; border-radius:4px;"><span style="color:#64748b; font-size:11px;">17. State income tax withheld (${_esc(employee.state || '')}):</span><br><strong>${_fmtCurr(t.box17 ?? t.sit)}</strong></div>
+        </div>
+    </div>`;
+}
+
 // Expose for both browser (window) and Node (verify/tests).
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         checkEfileReadiness, generateEFW2, generate1099IRISCSV,
-        aggregateEmployeeYearTotals,
+        aggregateEmployeeYearTotals, generatePayStubHTML, printPayStub,
+        generateW2SummaryHTML,
     };
 }
+
